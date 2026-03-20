@@ -744,12 +744,16 @@ registerTemplate(
 export function getAppDescription(appName: string, displayTitle?: string, music?: { title?: string; artist?: string; app?: string }): string {
   if (!appName) return DEFAULT_DESCRIPTION;
 
+  const appLower = appName.toLowerCase();
+  const isMusicAppForeground = _musicAppNames.has(appLower);
+
   // Base description (with or without display title)
   let base: string | undefined;
 
   // If we have a display_title, try to use a rich template
-  if (displayTitle) {
-    const template = titleTemplates.get(appName.toLowerCase());
+  // BUT skip template for music apps when music extra is present (♪ line handles song info)
+  if (displayTitle && !(isMusicAppForeground && music?.title)) {
+    const template = titleTemplates.get(appLower);
     if (template) {
       base = template(displayTitle);
     }
@@ -757,7 +761,7 @@ export function getAppDescription(appName: string, displayTitle?: string, music?
 
   if (!base) {
     // Known app without template → use generic description
-    const desc = lowerIndex.get(appName.toLowerCase());
+    const desc = lowerIndex.get(appLower);
     if (desc) {
       base = desc;
     }
@@ -772,15 +776,10 @@ export function getAppDescription(appName: string, displayTitle?: string, music?
     }
   }
 
-  // If music is playing in background, combine with the app description
-  if (music?.title) {
+  // If music is playing in background (non-music app foreground), combine descriptions
+  if (music?.title && !isMusicAppForeground) {
     const songLabel = music.artist ? `${music.artist}「${music.title}」` : `「${music.title}」`;
-    // Don't duplicate if the base description already mentions the song (music app is foreground)
-    const appLower = appName.toLowerCase();
-    const isMusicAppForeground = _musicAppNames.has(appLower);
-    if (!isMusicAppForeground) {
-      return `${base.replace(/喵~$/, "")}，一边听${songLabel}喵~`;
-    }
+    return `${base.replace(/喵~$/, "")}，一边听${songLabel}喵~`;
   }
 
   return base;

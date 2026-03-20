@@ -23,7 +23,7 @@ export default function CurrentStatus({ devices }: Props) {
   const battery = active?.extra;
   const hasBattery = battery && typeof battery.battery_percent === "number";
 
-  // Music info from the active device
+  // Music info — show standalone ♪ line, description should not duplicate it
   const music = active?.extra?.music;
   const musicText = music?.title
     ? music.artist
