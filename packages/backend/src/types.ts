@@ -1,7 +1,7 @@
 export interface DeviceInfo {
   device_id: string;
   device_name: string;
-  platform: "windows" | "android";
+  platform: "windows" | "android" | "macos";
 }
 
 export interface ReportPayload {

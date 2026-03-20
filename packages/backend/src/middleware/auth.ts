@@ -17,7 +17,7 @@ for (const [key, value] of Object.entries(process.env)) {
         token &&
         device_id &&
         device_name &&
-        (platform === "windows" || platform === "android")
+        (platform === "windows" || platform === "android" || platform === "macos")
       ) {
         tokenMap.set(token, { device_id, device_name, platform });
       }
