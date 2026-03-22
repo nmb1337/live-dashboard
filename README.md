@@ -69,7 +69,7 @@ git clone -b redesign/pixel-room https://github.com/Monika-Dream/live-dashboard.
 │  (Python)    │                   │  NSFW 过滤         │     静态文件      │  VN 对话框   │
 ├──────────────┤                   │  展示标题          │                   │  时间线      │
 │ Android Agent│  ──────────────→  │                   │                   │              │
-│ (Magisk/KSU) │                   └───────────────────┘                   └──────────────┘
+│(Health Connect)│                   └───────────────────┘                   └──────────────┘
 └──────────────┘
 ```
 
@@ -117,7 +117,7 @@ git clone -b redesign/pixel-room https://github.com/Monika-Dream/live-dashboard.
 | 前端 | Next.js 15 + React 19 + Tailwind CSS 4（静态导出） |
 | Windows Agent | Python + ctypes Win32 API + psutil |
 | macOS Agent | Python + AppleScript (osascript) + psutil |
-| Android Agent | Shell 脚本（Magisk/KernelSU 模块） |
+| Android Agent | Kotlin + Jetpack Compose + Health Connect + WorkManager |
 | 部署 | Docker（多阶段构建）+ Nginx 反向代理 |
 
 ## 项目结构
@@ -168,10 +168,9 @@ live-dashboard/
 │   │   ├── config.json.example   # 配置模板
 │   │   └── requirements.txt      # Python 依赖
 │   │
-│   └── android/                  # Android Agent（Magisk/KSU 模块）
-│       ├── service.sh            # 主脚本（dumpsys + curl）
-│       ├── config.sh             # 配置文件（已 gitignore）
-│       └── module.prop           # 模块元数据
+│   └── android-app/              # Android App（Health Connect 健康数据）
+│       ├── live-dashboard-v2.0.apk # 编译产物
+│       └── README.md             # 下载说明（源码在 android-source 分支）
 │
 ├── deploy/nginx/                 # Nginx 配置示例
 ├── start.sh                      # 一键本地启动脚本
@@ -395,17 +394,18 @@ cp -r out/* ../backend/public/
 
 **注意**：首次运行时，macOS 可能弹出权限请求，需在「系统设置 → 隐私与安全性 → 辅助功能」中授权终端或 Python。
 
-### Android Agent（Magisk / KernelSU）
+### Android App
 
-1. 创建 `agents/android/config.sh`（已 gitignore）：
-   ```bash
-   SERVER_URL="https://your-domain.com"
-   TOKEN="your_device_token_here"
-   ```
+Android 客户端无需 root，通过 Health Connect 上传健康数据，并可选开启心跳上报（在线状态 + 电量）。
 
-2. 作为 Magisk/KernelSU 模块安装（将 `agents/android/` 文件夹打包为 zip）
+1. 从 [`agents/android-app/`](./agents/android-app/) 下载 APK 安装
+2. 打开 APP，在「设置」页配置 `server_url` 和 `token`
+3. 在「健康」页授权 Health Connect 权限
+4. （可选）开启心跳上报
 
-3. `service.sh` 脚本在后台运行，通过 `am stack list`（轻量）或 `dumpsys`（兼容）获取前台应用，通过 `dumpsys media_session` 检测音乐播放
+**系统要求**：Android 8.0+，需安装 [Health Connect](https://play.google.com/store/apps/details?id=com.google.android.apps.healthdata)
+
+源码与技术细节见 [`android-source` 分支](https://github.com/Monika-Dream/live-dashboard/tree/android-source/agents/android-app)。
 
 ## VPS 部署指南（Docker + Nginx）
 
