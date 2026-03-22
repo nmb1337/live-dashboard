@@ -2,17 +2,11 @@ import type { DeviceState } from "@/lib/api";
 import { getAppDescription } from "@/lib/app-descriptions";
 
 interface Props {
-  devices: DeviceState[];
+  device: DeviceState | undefined;
 }
 
-export default function CurrentStatus({ devices }: Props) {
-  // Find the most recently active online device
-  const onlineDevices = devices.filter((d) => d.is_online === 1);
-  const active = onlineDevices.sort((a, b) => {
-    const ta = a.last_seen_at ? new Date(a.last_seen_at).getTime() : 0;
-    const tb = b.last_seen_at ? new Date(b.last_seen_at).getTime() : 0;
-    return tb - ta;
-  })[0];
+export default function CurrentStatus({ device }: Props) {
+  const active = device?.is_online === 1 ? device : undefined;
 
   const isOnline = !!active;
   const description = active
@@ -54,18 +48,13 @@ export default function CurrentStatus({ devices }: Props) {
                 ♪ 正在听：{musicText}
               </p>
             )}
-            <div className="flex items-center justify-center gap-3 mt-1.5">
-              {hasBattery && (
+            {hasBattery && battery && (
+              <div className="flex items-center justify-center gap-3 mt-1.5">
                 <span className="text-[10px] text-[var(--color-text-muted)]">
                   {battery.battery_charging ? "\u26A1" : "\u{1F50B}"}{battery.battery_percent}%
                 </span>
-              )}
-              {onlineDevices.length > 1 && (
-                <span className="text-[10px] text-[var(--color-text-muted)]">
-                  {onlineDevices.length} 台设备在线中
-                </span>
-              )}
-            </div>
+              </div>
+            )}
           </>
         ) : (
           <div className="py-1">

@@ -5,6 +5,8 @@ import { handleReport } from "./routes/report";
 import { handleCurrent } from "./routes/current";
 import { handleTimeline } from "./routes/timeline";
 import { handleHealth } from "./routes/health";
+import { handleHealthData, handleHealthDataQuery } from "./routes/health-data";
+import { handleHealthWebhook } from "./routes/health-webhook";
 
 // Start scheduled cleanup tasks (import triggers setInterval registration)
 import "./services/cleanup";
@@ -62,6 +64,12 @@ const server = Bun.serve({
         response = handleTimeline(url);
       } else if (pathname === "/api/health" && req.method === "GET") {
         response = handleHealth();
+      } else if (pathname === "/api/health-data" && req.method === "POST") {
+        response = await handleHealthData(req);
+      } else if (pathname === "/api/health-data" && req.method === "GET") {
+        response = handleHealthDataQuery(url);
+      } else if (pathname === "/api/health-webhook" && req.method === "POST") {
+        response = await handleHealthWebhook(req);
       } else if (!pathname.startsWith("/api/")) {
         // Static file serving disabled if directory doesn't exist
         if (!staticEnabled) {

@@ -68,3 +68,24 @@ export async function fetchTimeline(date: string, signal?: AbortSignal): Promise
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   return res.json();
 }
+
+// Health data types
+export interface HealthRecord {
+  type: string;
+  value: number;
+  unit: string;
+  recorded_at: string;
+  end_time: string;
+}
+
+export interface HealthDataResponse {
+  date: string;
+  records: HealthRecord[];
+}
+
+export async function fetchHealthData(date: string, signal?: AbortSignal): Promise<HealthDataResponse> {
+  const url = `${API_BASE}/api/health-data?date=${encodeURIComponent(date)}`;
+  const res = await fetch(url, { signal });
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  return res.json();
+}

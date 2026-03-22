@@ -50,3 +50,11 @@ export interface TimelineSegment {
   device_id: string;
   device_name: string;
 }
+
+export interface HealthRecord {
+  type: string;
+  value: number;
+  unit: string;
+  recorded_at: string;
+  end_time: string;
+}
