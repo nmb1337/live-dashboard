@@ -432,85 +432,105 @@ Android 客户端无需 root，通过 Health Connect 上传健康数据，并可
 
 ## 使用预构建 Docker 镜像（推荐）
 
-不想 clone 源码？复制下面的命令，5 分钟搞定。
+不想 clone 源码？一条命令搞定。
 
-### 第一步：下载配置文件
+### 快速启动（一条命令）
+
+**Linux / macOS：**
+
+```bash
+docker run -d --name live-dashboard \
+  -p 3000:3000 \
+  -v dashboard_data:/data \
+  -e HASH_SECRET=$(openssl rand -hex 32) \
+  -e DEVICE_TOKEN_1=$(openssl rand -hex 16):my-pc:MyPC:windows \
+  ghcr.io/monika-dream/live-dashboard:latest
+```
+
+**Windows（PowerShell）：**
+
+```powershell
+docker run -d --name live-dashboard `
+  -p 3000:3000 `
+  -v dashboard_data:/data `
+  -e HASH_SECRET=$(-join((1..32)|%{'{0:x2}'-f(Get-Random -Max 256)})) `
+  -e DEVICE_TOKEN_1=$(-join((1..16)|%{'{0:x2}'-f(Get-Random -Max 256)})):my-pc:MyPC:windows `
+  ghcr.io/monika-dream/live-dashboard:latest
+```
+
+> Windows 用户需要先安装 [Docker Desktop](https://www.docker.com/products/docker-desktop/)。
+
+运行后打开浏览器访问 `http://localhost:3000` 即可看到仪表盘。
+
+### 查看你的设备 token
+
+上面命令中 token 是随机生成的，运行前**先单独执行生成命令记下来**：
+
+```bash
+# Linux / macOS
+openssl rand -hex 16
+
+# Windows PowerShell
+-join((1..16)|%{'{0:x2}'-f(Get-Random -Max 256)})
+```
+
+把输出的随机字符串记下来（如 `9f8e7d6c5b4a3210abcdef1234567890`），这就是你在 Agent（Windows/macOS/Android）配置里要填的 `token`，`http://你的IP:3000` 就是 `server_url`。然后把这个值替换到 `docker run` 命令的 `DEVICE_TOKEN_1` 中再执行。
+
+### 多设备 / 自定义配置
+
+如果需要添加更多设备或自定义设置，推荐用 docker-compose：
+
+**Linux / macOS：**
 
 ```bash
 mkdir live-dashboard && cd live-dashboard
 
-# 下载两个文件（docker-compose 和环境变量模板）
 curl -LO https://raw.githubusercontent.com/Monika-Dream/live-dashboard/main/docker-compose.example.yml
 curl -LO https://raw.githubusercontent.com/Monika-Dream/live-dashboard/main/.env.example
 
-# 重命名为正式文件
 mv docker-compose.example.yml docker-compose.yml
 mv .env.example .env
 ```
 
-### 第二步：生成密钥和设备令牌
+**Windows（PowerShell）：**
 
-```bash
-# 生成 HASH_SECRET（必填，用于数据去重加密）
-openssl rand -hex 32
-# 输出示例：a1b2c3d4e5f6...（复制这一串）
+```powershell
+mkdir live-dashboard; cd live-dashboard
 
-# 为每台设备生成一个随机 token
-openssl rand -hex 16
-# 输出示例：9f8e7d6c5b4a...（每台设备各生成一次）
+Invoke-WebRequest -Uri "https://raw.githubusercontent.com/Monika-Dream/live-dashboard/main/docker-compose.example.yml" -OutFile "docker-compose.yml"
+Invoke-WebRequest -Uri "https://raw.githubusercontent.com/Monika-Dream/live-dashboard/main/.env.example" -OutFile ".env"
 ```
 
-### 第三步：编辑 .env
-
-```bash
-nano .env   # 或 vim .env
-```
-
-填入刚才生成的值，格式说明：
+编辑 `.env` 文件，填入设备令牌和密钥：
 
 ```env
 # 设备令牌格式：随机token:设备ID:设备名称:平台
 # ⚠️ 冒号是分隔符，各字段本身不能包含冒号
-#
-# 示例：Windows 电脑
-DEVICE_TOKEN_1=9f8e7d6c5b4a3210:my-pc:我的电脑:windows
-#
-# 示例：Android 手机（如果有）
-DEVICE_TOKEN_2=abcdef1234567890:my-phone:我的手机:android
-#
-# 不需要的设备留空或删掉即可
+DEVICE_TOKEN_1=你的随机token:my-pc:我的电脑:windows
+DEVICE_TOKEN_2=另一个随机token:my-phone:我的手机:android
 
-# HMAC 密钥（用上面 openssl rand -hex 32 生成的那串）
-HASH_SECRET=这里粘贴你生成的64位随机字符串
+# HMAC 密钥（Linux: openssl rand -hex 32 生成）
+HASH_SECRET=你的64位随机字符串
 ```
 
-**关键信息**：`.env` 里的 `DEVICE_TOKEN_1=xxx:my-pc:...` 中冒号前的 `xxx` 部分就是你的 **设备密钥**，Agent（Windows/macOS/Android）配置时填的 `token` 就是这个值。
-
-### 第四步：启动
+然后启动：
 
 ```bash
 docker compose up -d
 ```
 
-访问 `http://你的服务器IP:3000` 即可看到仪表盘（此时没有设备数据，会显示离线夜间模式）。内网环境直接用 HTTP 就行；如果是公网 VPS，建议配合 Nginx 反向代理 + HTTPS（参考下方 [VPS 部署指南](#vps-部署指南docker--nginx) 第五步），避免 token 明文传输。
-
-### 第五步：配置 Agent
-
-服务端跑起来后，在你的设备上安装对应的 Agent，把数据上报过来：
-
-- **Windows**：`agents/windows/config.json` 里的 `token` 填 `.env` 中冒号前的那段密钥，`server_url` 填 `https://你的域名`
-- **macOS**：同上，配置 `agents/macos/config.json`
-- **Android**：APP 设置页直接输入 URL 和 token
-
-详见下方 [Agent 配置](#agent-配置) 章节。
-
 ### 更新镜像
 
 ```bash
+# docker run 方式
+docker stop live-dashboard && docker rm live-dashboard
+# 重新执行上面的 docker run 命令（注意用相同的 HASH_SECRET 和 token）
+
+# docker compose 方式
 docker compose pull && docker compose up -d
 ```
 
-> **安全提醒**：永远不要把真实 token 写进 `docker-compose.yml`，务必使用 `.env` 文件，且不要提交 `.env` 到版本控制。
+内网环境直接用 HTTP 访问即可；公网 VPS 建议配合 Nginx 反向代理 + HTTPS（参考下方 [VPS 部署指南](#vps-部署指南docker--nginx) 第五步），避免 token 明文传输。
 
 ---
 
