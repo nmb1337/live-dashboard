@@ -2,7 +2,7 @@
 
 实时设备活动仪表盘 — 公开展示你正在使用的应用，拥有二次元风格 UI 和隐私优先设计。当前默认站点名已经改成 xuyihong，并支持在同一个页面聚合查看多个人的 Live Dashboard。
 
-在线演示：https://xuyihong.icu/
+在线演示：https://xuyihong.icu/（QQ交流群1093496287，可以反馈问题和闲聊）
 
 ## 截图
 
