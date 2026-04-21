@@ -10,9 +10,23 @@ import { handleHealthWebhook } from "./routes/health-webhook";
 import { handleConfig } from "./routes/config";
 import { handleProxy } from "./routes/proxy";
 import { injectSiteConfig } from "./services/site-config";
+import { cleanupUnconfiguredDeviceData } from "./db";
+import { getConfiguredDeviceIds } from "./middleware/auth";
 
 // Start scheduled cleanup tasks (import triggers setInterval registration)
 import "./services/cleanup";
+
+const configuredDeviceIds = getConfiguredDeviceIds();
+if (configuredDeviceIds.length > 0) {
+  const cleaned = cleanupUnconfiguredDeviceData(configuredDeviceIds);
+  const totalCleaned =
+    cleaned.deviceStatesDeleted + cleaned.activitiesDeleted + cleaned.healthRecordsDeleted;
+  if (totalCleaned > 0) {
+    console.log(
+      `[cleanup] Removed stale records: device_states=${cleaned.deviceStatesDeleted}, activities=${cleaned.activitiesDeleted}, health_records=${cleaned.healthRecordsDeleted}`
+    );
+  }
+}
 
 const PORT = parseInt(process.env.PORT || "3000", 10);
 if (isNaN(PORT) || PORT < 1 || PORT > 65535) {

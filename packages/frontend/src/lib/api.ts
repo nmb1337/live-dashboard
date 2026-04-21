@@ -144,26 +144,7 @@ const defaultConfig: SiteConfig = {
   siteTitle: "xuyihong Now",
   siteDescription: "What is xuyihong doing right now?",
   siteFavicon: "/favicon.ico",
-  dashboards: [
-    {
-      id: "aloys23",
-      name: "DBJD-CR",
-      url: "https://livedashboard.aloys23.link",
-      description: "Aloys23 的实时面板",
-    },
-    {
-      id: "ailucat",
-      name: "八九四",
-      url: "https://live.ailucat.top",
-      description: "Ailucat 的实时面板",
-    },
-    {
-      id: "fun91",
-      name: "Monika",
-      url: "https://live.91fun.asia",
-      description: "91fun 的实时面板",
-    },
-  ],
+  dashboards: [],
 };
 
 export { defaultConfig };

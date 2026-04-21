@@ -3,6 +3,8 @@ services:
     build: .
     container_name: live_dashboard
     restart: unless-stopped
+    ports:
+      - "3000:3000"
     environment:
       - PORT=3000
       - STATIC_DIR=/app/public

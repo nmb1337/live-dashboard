@@ -21,26 +21,7 @@ export const SITE_FAVICON_PLACEHOLDER = "/__LIVE_DASHBOARD_SITE_FAVICON__";
 const DEFAULT_DISPLAY_NAME = "xuyihong";
 const DEFAULT_FAVICON = "/favicon.ico";
 const SCRIPT_TAG_PATTERN = /<script\b[^>]*>[\s\S]*?<\/script>/gi;
-const DEFAULT_DASHBOARDS: DashboardProfile[] = [
-  {
-    id: "aloys23",
-    name: "DBJD-CR",
-    url: "https://livedashboard.aloys23.link",
-    description: "Aloys23 的实时面板",
-  },
-  {
-    id: "ailucat",
-    name: "八九四",
-    url: "https://live.ailucat.top",
-    description: "Ailucat 的实时面板",
-  },
-  {
-    id: "fun91",
-    name: "Monika",
-    url: "https://live.91fun.asia",
-    description: "91fun 的实时面板",
-  },
-];
+const DEFAULT_DASHBOARDS: DashboardProfile[] = [];
 
 function nonEmpty(value: string | undefined): string | undefined {
   const trimmed = value?.trim();

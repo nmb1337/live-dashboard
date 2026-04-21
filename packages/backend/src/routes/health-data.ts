@@ -1,4 +1,4 @@
-import { authenticateToken } from "../middleware/auth";
+import { authenticateToken, isConfiguredDeviceId } from "../middleware/auth";
 import { db } from "../db";
 import type { HealthRecord } from "../types";
 
@@ -101,6 +101,10 @@ export function handleHealthDataQuery(url: URL): Response {
     return Response.json({ error: "date parameter required (YYYY-MM-DD)" }, { status: 400 });
   }
 
+  if (deviceId && !isConfiguredDeviceId(deviceId)) {
+    return Response.json({ date, records: [] });
+  }
+
   // Accept timezone offset in minutes (e.g. -480 for UTC+8), same as /api/timeline
   const tzParam = url.searchParams.get("tz");
   const tzOffsetMinutes = tzParam ? parseInt(tzParam, 10) : 0;
@@ -131,6 +135,8 @@ export function handleHealthDataQuery(url: URL): Response {
         `).all(date) as HealthRecord[];
       }
 
+      records = records.filter((record) => isConfiguredDeviceId(record.device_id));
+
       return Response.json({ date, records });
     }
 
@@ -159,6 +165,8 @@ export function handleHealthDataQuery(url: URL): Response {
         ORDER BY recorded_at ASC
       `).all(startOfDay, startOfNextDay) as HealthRecord[];
     }
+
+    records = records.filter((record) => isConfiguredDeviceId(record.device_id));
 
     return Response.json({ date, records });
   } catch (e: any) {

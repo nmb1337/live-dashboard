@@ -2,17 +2,13 @@
 
 实时设备活动仪表盘 — 公开展示你正在使用的应用，拥有二次元风格 UI 和隐私优先设计。当前默认站点名已经改成 xuyihong，并支持在同一个页面聚合查看多个人的 Live Dashboard。
 
-在线演示：https://now.monikadream.homes/
+在线演示：https://xuyihong.icu/
 
 ## 截图
 
-**日间模式（设备在线）**
+**当前版本界面预览**
 
-![日间模式](docs/preview-main-light.png)
-
-**夜间模式（设备离线）**
-
-![夜间模式](docs/preview-main-dark.png)
+![界面预览](docs/Snipaste_2026-04-21_21-39-40.png)
 
 ## 特色
 
@@ -43,8 +39,9 @@ docker compose version
 
 ```powershell
 # 1) 生成 token 与 HASH_SECRET
-$TOKEN = -join ((48..57) + (97..102) | Get-Random -Count 32 | ForEach-Object {[char]$_})
-$SECRET = -join ((48..57) + (97..102) | Get-Random -Count 64 | ForEach-Object {[char]$_})
+$HEX = "0123456789abcdef".ToCharArray()
+$TOKEN = -join (1..32 | ForEach-Object { $HEX | Get-Random })
+$SECRET = -join (1..64 | ForEach-Object { $HEX | Get-Random })
 
 # 2) 切到仓库目录（按你的实际路径修改）
 Set-Location D:\live-dashboard-main
@@ -104,6 +101,9 @@ docker volume rm dashboard_data
 ```powershell
 Set-Location D:\live-dashboard-main
 Copy-Item .env.example .env -Force
+
+# 本项目默认使用外部网络 + 固定 IP，请先创建（仅首次）
+docker network create --driver bridge --subnet 172.20.0.0/24 your_external_network
 ```
 
 说明：仓库内的 `docker-compose.yml` 默认走本地构建（`build: .`），会使用你当前代码；
@@ -126,6 +126,9 @@ EXTERNAL_DASHBOARDS=[{"id":"aloys23","name":"DBJD-CR","url":"https://livedashboa
 ### 3. 启动 Compose
 
 ```powershell
+# 可选：先做配置体检，避免启动后才报错
+docker compose config -q
+
 docker compose up -d
 docker compose ps
 Invoke-WebRequest http://127.0.0.1:3000/api/config -UseBasicParsing
@@ -137,9 +140,54 @@ Invoke-WebRequest http://127.0.0.1:3000/api/config -UseBasicParsing
 docker compose up -d --build
 ```
 
+### 5. Compose 常见错误与处理
+
+1. 报错变量未设置（例如 `The "HASH_SECRET" variable is not set`）
+  - 原因：`.env` 不存在或变量没填。
+  - 处理：确认仓库根目录存在 `.env`，并至少填写 `DEVICE_TOKEN_1`、`HASH_SECRET`。
+
+2. 报错网络不存在（`network your_external_network not found`）
+  - 原因：还没创建外部网络。
+  - 处理：执行 `docker network create --driver bridge --subnet 172.20.0.0/24 your_external_network`。
+
+3. 报错子网不匹配（`no configured subnet contains IP address 172.20.0.80`）
+  - 原因：外部网络存在，但子网不是 `172.20.0.0/24`。
+  - 处理：删除后按正确子网重建：
+    `docker network rm your_external_network`
+    `docker network create --driver bridge --subnet 172.20.0.0/24 your_external_network`
+
+4. 报错容器名冲突（`Conflict. The container name "/live_dashboard" is already in use`）
+  - 原因：已有同名容器在运行或残留。
+  - 处理：`docker rm -f live_dashboard` 后再启动 Compose。
+
+5. 报错端口占用（`bind: address already in use`）
+  - 原因：3000 端口已被其他容器或进程占用。
+  - 处理：释放 3000，或把 `docker-compose.yml` 里的 `ports` 改为 `3001:3000`。
+
+6. 明明重启了但页面还是旧数据
+  - 常见原因：访问到了另一套旧容器（同机多个容器都在跑）。
+  - 处理：先 `docker ps` 核对映射端口和容器名，再访问对应端口；必要时停掉旧容器。
+
+7. 已删卷但仍看到旧设备
+  - 常见原因：删错卷名（Compose 卷通常带项目名前缀），或前端看到的是外部面板数据。
+  - 处理：使用 `docker compose down -v` 清理本项目卷，并确认 `EXTERNAL_DASHBOARDS` 配置是否包含外部站点。
+
 ## 多面板部署（一个站点看多人）
 
 多面板核心是 `EXTERNAL_DASHBOARDS`，它是一个 JSON 数组。每一项至少包含 `id`、`name`、`url`。
+
+作用：
+
+1. **一个入口看多人**：在同一个页面切换查看自己和朋友/团队成员的 Live Dashboard，不用分别开多个网页。
+2. **快速对比状态**：首页卡片会同时展示各面板在线设备数、状态摘要，方便你快速知道谁在线、谁离线。
+3. **降低维护成本**：每个人可以保留自己的独立部署与数据，你只需要在主面板维护一份 `EXTERNAL_DASHBOARDS` 列表。
+4. **适合展示场景**：适合社群主页、团队状态墙、个人导航页做聚合展示，不会把多人的数据混写到同一个数据库。
+
+工作方式：
+
+1. 本站通过 `/api/proxy` 读取外部站点的 `api/config`、`api/current`、`api/timeline`。
+2. 默认不会写入外部站点数据到本地数据库，只做读取和展示。
+3. 某个外部站点不可达时，只影响该站点卡片，不影响其他面板。
 
 ```env
 EXTERNAL_DASHBOARDS=[

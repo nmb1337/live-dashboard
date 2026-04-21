@@ -181,4 +181,39 @@ export const cleanupOldActivities = db.prepare(`
   DELETE FROM activities WHERE created_at < datetime('now', '-7 days')
 `);
 
+export function cleanupUnconfiguredDeviceData(allowedDeviceIds: string[]): {
+  deviceStatesDeleted: number;
+  activitiesDeleted: number;
+  healthRecordsDeleted: number;
+} {
+  if (allowedDeviceIds.length === 0) {
+    return {
+      deviceStatesDeleted: 0,
+      activitiesDeleted: 0,
+      healthRecordsDeleted: 0,
+    };
+  }
+
+  const placeholders = allowedDeviceIds.map(() => "?").join(", ");
+
+  const deleteDeviceStates = db.prepare(
+    `DELETE FROM device_states WHERE device_id NOT IN (${placeholders})`
+  );
+  const deleteActivities = db.prepare(
+    `DELETE FROM activities WHERE device_id NOT IN (${placeholders})`
+  );
+  const deleteHealthRecords = db.prepare(
+    `DELETE FROM health_records WHERE device_id NOT IN (${placeholders})`
+  );
+
+  const tx = db.transaction((ids: string[]) => {
+    const deviceStatesDeleted = deleteDeviceStates.run(...ids).changes;
+    const activitiesDeleted = deleteActivities.run(...ids).changes;
+    const healthRecordsDeleted = deleteHealthRecords.run(...ids).changes;
+    return { deviceStatesDeleted, activitiesDeleted, healthRecordsDeleted };
+  });
+
+  return tx(allowedDeviceIds);
+}
+
 export default db;
