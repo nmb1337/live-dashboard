@@ -241,7 +241,7 @@ Invoke-RestMethod http://127.0.0.1:3000/api/current | Select-Object -ExpandPrope
 |------|---------|---------|
 | Windows | `live-dashboard-agent.exe` | [Wiki - Windows Agent](https://github.com/Monika-Dream/live-dashboard/wiki/Agent-配置-Windows) |
 | macOS | `live-dashboard-agent-macos.zip` | [Wiki - macOS Agent](https://github.com/Monika-Dream/live-dashboard/wiki/Agent-配置-macOS) |
-| Android | `live-dashboard.apk` | [Wiki - Android App](https://github.com/Monika-Dream/live-dashboard/wiki/Agent-配置-Android) |
+| Android | `live-dashboard-android-agent.apk` | [仓库文档 - Android Agent](docs/android-agent.md) |
 
 ## 主题
 
