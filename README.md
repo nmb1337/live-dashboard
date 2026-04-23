@@ -38,10 +38,20 @@ docker compose version
 ### 1. 一键启动（单设备示例，使用当前仓库代码构建）
 
 ```powershell
-# 1) 生成 token 与 HASH_SECRET
-$HEX = "0123456789abcdef".ToCharArray()
-$TOKEN = -join (1..32 | ForEach-Object { $HEX | Get-Random })
-$SECRET = -join (1..64 | ForEach-Object { $HEX | Get-Random })
+# 1) 生成密钥
+# 每台设备需要一个独立的设备密钥，另外还需要一个服务端密钥。
+
+# Linux / macOS：
+# 设备密钥（每台设备各生成一个，记下来）
+# openssl rand -hex 16
+# HASH_SECRET（服务端内部用，只需一个）
+# openssl rand -hex 32
+
+# Windows（PowerShell）：
+# 设备密钥
+$TOKEN = -join((1..16)|%{'{0:x2}'-f(Get-Random -Max 256)})
+# HASH_SECRET
+$SECRET = -join((1..32)|%{'{0:x2}'-f(Get-Random -Max 256)})
 
 # 2) 切到仓库目录（按你的实际路径修改）
 Set-Location D:\live-dashboard-main
