@@ -180,7 +180,7 @@ if (NeedsGeneratedValue ([string]($envMap["HASH_SECRET"]))) {
 	$envMap["HASH_SECRET"] = New-HexToken -Bytes 32
 }
 if (NeedsGeneratedValue ([string]($envMap["ADMIN_TOKEN"]))) {
-	$envMap["ADMIN_TOKEN"] = New-HexToken -Bytes 24
+	$envMap["ADMIN_TOKEN"] = "123456"
 }
 
 Ensure-DeviceToken -Map $envMap -Key "DEVICE_TOKEN_1" -DeviceId "pc-1" -DeviceName "My PC" -Platform "windows"

@@ -49,10 +49,10 @@ function normalizeDashboardUrl(url: string | undefined): string | undefined {
     const parsed = new URL(trimmed);
     // Allow http for LAN/local deployments; https remains recommended for public dashboards.
     if (parsed.protocol !== "https:" && parsed.protocol !== "http:") return undefined;
-    parsed.hash = "";
-    parsed.search = "";
-    parsed.pathname = parsed.pathname.replace(/\/+$/, "") || "/";
-    return parsed.toString().replace(/\/$/, "");
+
+    // Always pin external links to the dashboard site's main entry
+    // so nested routes/query-selected subpanels do not break proxy calls.
+    return parsed.origin;
   } catch {
     return undefined;
   }
@@ -130,12 +130,19 @@ function mergeDashboards(
 function getDashboards(): DashboardProfile[] {
   const raw = nonEmpty(process.env.EXTERNAL_DASHBOARDS);
   const hiddenIds = new Set(getHiddenExternalDashboardIds());
-  const fromDb = getExternalDashboards().map((record) => ({
-    id: record.id,
-    name: record.name,
-    url: record.url,
-    description: record.description,
-  })).filter((dashboard) => !hiddenIds.has(dashboard.id));
+  const fromDb = getExternalDashboards()
+    .map((record) => {
+      const normalizedUrl = normalizeDashboardUrl(record.url);
+      if (!normalizedUrl) return null;
+      return {
+        id: record.id,
+        name: record.name,
+        url: normalizedUrl,
+        description: record.description,
+      };
+    })
+    .filter((dashboard): dashboard is DashboardProfile => !!dashboard)
+    .filter((dashboard) => !hiddenIds.has(dashboard.id));
 
   if (!raw) {
     return fromDb.length > 0 ? fromDb : DEFAULT_DASHBOARDS;
