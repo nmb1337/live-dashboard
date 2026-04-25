@@ -65,6 +65,35 @@ cd /path/to/live-dashboard-main
 cp .env.example .env
 ```
 
+### 1.1 先生成密钥（每台设备一个 + 服务端一个）
+
+每台设备需要一个独立的设备密钥，另外还需要一个服务端密钥（`HASH_SECRET`）。
+
+Linux / macOS：
+
+```bash
+# 设备密钥（每台设备各生成一个，记下来）
+openssl rand -hex 16
+
+# HASH_SECRET（服务端内部用，只需一个）
+openssl rand -hex 32
+```
+
+Windows（PowerShell）：
+
+```powershell
+# 设备密钥
+-join((1..16)|%{'{0:x2}'-f(Get-Random -Max 256)})
+
+# HASH_SECRET
+-join((1..32)|%{'{0:x2}'-f(Get-Random -Max 256)})
+```
+
+说明：
+- 每台设备的“设备密钥”都要不同。
+- `HASH_SECRET` 整个服务只需要配置一个。
+- 生成出的设备密钥，作为 `DEVICE_TOKEN_N=密钥:device_id:device_name:platform` 里的“密钥”部分使用。
+
 编辑 `.env`，至少改这几项：
 
 ```env
