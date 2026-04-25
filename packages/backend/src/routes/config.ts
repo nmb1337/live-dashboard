@@ -1,4 +1,4 @@
-import { deleteExternalDashboard, upsertExternalDashboard } from "../db";
+import { deleteExternalDashboard, hideExternalDashboard, upsertExternalDashboard } from "../db";
 import { ensureAdminAuthorized } from "../middleware/admin";
 import { getSiteConfig } from "../services/site-config";
 import { normalizeDashboardProfileInput } from "../services/site-config";
@@ -46,9 +46,16 @@ export async function handleDashboardDelete(req: Request): Promise<Response> {
     return Response.json({ error: "id required" }, { status: 400 });
   }
 
+  const before = getSiteConfig().dashboards;
+  const exists = before.some((dashboard) => dashboard.id === id);
+  if (!exists) {
+    return Response.json({ error: "Dashboard not found" }, { status: 404 });
+  }
+
   const changes = deleteExternalDashboard(id);
   if (changes === 0) {
-    return Response.json({ error: "Dashboard not found" }, { status: 404 });
+    // If the dashboard comes from EXTERNAL_DASHBOARDS env, mark it hidden at runtime.
+    hideExternalDashboard(id);
   }
 
   return Response.json({ ok: true, dashboards: getSiteConfig().dashboards });

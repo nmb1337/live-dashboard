@@ -1,172 +1,191 @@
 # Live Dashboard
 
-实时设备活动仪表盘（前端展示 + 后端数据与面板管理）。
+这是一个可以实时展示“你正在用什么应用”的网页看板。
 
-当前仓库已支持：
-- 页面直接管理多人面板（新增/删除）
-- 后端 `ADMIN_TOKEN` 鉴权
-- 前后端分离启动（开发/调试）
-- Docker 一体化部署
-
-## 你关心的功能（先看这里）
-
-### 1) 多人面板管理界面在哪？
-
-首页顶部有「多人面板管理」区块（在 `Panels` 切换区上方）。
-
-用途：
-- 前端：展示和操作入口
-- 后端：`/api/config/dashboards` 持久化管理（SQLite）
-
-### 2) 为什么看不到或不能新增？
-
-常见原因：
-1. 前端不是最新构建（容器没 `--build`）
-2. `.env` 没有 `ADMIN_TOKEN`
-3. 前端分离部署时 `NEXT_PUBLIC_API_BASE` 没指向后端
+你要的核心点先说结论：
+- 可以直接在网页里添加/更新/删除多人面板。
+- 不需要改 `.env`，也不需要重新构建镜像。
+- 只要先设置好管理密码（`ADMIN_TOKEN` 或 `ADMIN_PASSWORD`）即可。
 
 ---
 
-## 目录结构（核心）
+## 下载链接（按你的要求）
 
-- `packages/frontend`：Next.js 前端（展示 + 管理 UI）
-- `packages/backend`：Bun + SQLite 后端（数据 + 管理 API）
-- `docker-compose.yml`：本仓库默认部署方式
-- `.env.example`：环境变量模板（包含 `ADMIN_TOKEN`）
-- `deploy/windows-dockerdesktop-local.ps1`：Windows 一键初始化与启动
+| 平台 | 下载链接 | 说明 |
+|---|---|---|
+| Windows | https://github.com/Monika-Dream/live-dashboard/releases | 原作者链接 |
+| macOS | https://github.com/Monika-Dream/live-dashboard/releases | 原作者链接 |
+| Android | https://github.com/nmb1337/live-dashboard/releases/latest/download/live-dashboard-android-agent.apk | 你的 Android App 链接 |
 
 ---
 
-## 环境变量（最小必填）
+## 部署方式 1：Windows（PowerShell + Docker Desktop）
 
-复制模板：
+### 1. 先准备
+
+1. 安装并启动 Docker Desktop。
+2. 打开 PowerShell。
+3. 进入项目目录：
 
 ```powershell
-Copy-Item .env.example .env -Force
+Set-Location D:\live-dashboard-main
 ```
 
-最少确认以下变量：
-
-```env
-DEVICE_TOKEN_1=token1:my-pc:My PC:windows
-HASH_SECRET=替换为随机字符串
-ADMIN_TOKEN=替换为随机字符串
-```
-
-建议随机生成：
-
-```powershell
-# 32 字节（64 hex）
-$HASH_SECRET = -join((1..32) | ForEach-Object { '{0:x2}' -f (Get-Random -Max 256) })
-# 24 字节（48 hex）
-$ADMIN_TOKEN = -join((1..24) | ForEach-Object { '{0:x2}' -f (Get-Random -Max 256) })
-```
-
-> `ADMIN_TOKEN` 用于多人面板管理接口鉴权；没有它时，新增/删除会返回 503。
-
----
-
-## 启动方式 A：Docker 一体化（推荐）
-
-### Windows 一键脚本
+### 2. 一键启动（推荐）
 
 ```powershell
 Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass -Force
 .\deploy\windows-dockerdesktop-local.ps1
 ```
 
-### 手动 Compose
+脚本会自动：
+- 生成/修复 `.env`
+- 生成设备 token
+- 生成管理密码（`ADMIN_TOKEN`）
+- 构建并启动容器
 
-```powershell
-Set-Location D:\live-dashboard-main
-
-docker network create --driver bridge --subnet 172.20.0.0/24 your_external_network
-
-docker compose config -q
-docker compose up -d --build
-```
-
-验证：
+### 3. 验证
 
 ```powershell
 Invoke-RestMethod http://127.0.0.1:3000/api/health
-Invoke-RestMethod http://127.0.0.1:3000/api/config
+```
+
+浏览器打开：
+- http://127.0.0.1:3000
+
+---
+
+## 部署方式 2：Linux（Docker）
+
+### 1. 准备 `.env`
+
+```bash
+cd /path/to/live-dashboard-main
+cp .env.example .env
+```
+
+编辑 `.env`，至少改这几项：
+
+```env
+DEVICE_TOKEN_1=你的设备token:my-pc:My PC:linux
+HASH_SECRET=你自己的随机字符串
+ADMIN_TOKEN=你自己的管理密码
+```
+
+### 2. 启动
+
+```bash
+docker compose up -d --build
+```
+
+### 3. 验证
+
+```bash
+curl http://127.0.0.1:3000/api/health
 ```
 
 ---
 
-## 启动方式 B：前后端分离（重点）
+## 如何设置“管理面板密码”
 
-适用场景：你要单独调试前端页面或后端管理接口。
+支持两种变量（设置一个即可）：
+- `ADMIN_TOKEN`
+- `ADMIN_PASSWORD`（优先级更高）
 
-### B1. 启动后端（管理 API 所在）
+### 密码设置位置（最重要）
 
-> 需要 Bun。若主机未安装 Bun，可用 Docker 方式启动整站进行联调。
+管理密码写在项目根目录的 `.env` 文件里：
+
+- Windows 路径示例：`D:\live-dashboard-main\.env`
+- Linux 路径示例：`/path/to/live-dashboard-main/.env`
+
+也就是说，你只需要改 `.env`，不是改前端代码。
+
+### 直接可用的设置方法
+
+Windows（PowerShell）：
 
 ```powershell
-Set-Location D:\live-dashboard-main\packages\backend
-bun install
+Set-Location D:\live-dashboard-main
+Copy-Item .env.example .env -Force
 
-# 当前 PowerShell 会话设置环境变量
-$env:PORT = "3000"
-$env:DB_PATH = "D:/live-dashboard-main/live-dashboard.db"
-$env:HASH_SECRET = "替换为你的 HASH_SECRET"
-$env:DEVICE_TOKEN_1 = "替换为你的 DEVICE_TOKEN_1"
-$env:ADMIN_TOKEN = "替换为你的 ADMIN_TOKEN"
-
-bun run src/index.ts
+# 二选一（推荐只保留一个）
+Add-Content .env "ADMIN_TOKEN=your_strong_password_here"
+# 或
+Add-Content .env "ADMIN_PASSWORD=your_strong_password_here"
 ```
 
-后端地址：`http://127.0.0.1:3000`
+Linux：
 
-### B2. 启动前端（展示层）
+```bash
+cd /path/to/live-dashboard-main
+cp .env.example .env
 
-新开一个终端：
+# 二选一（推荐只保留一个）
+echo 'ADMIN_TOKEN=your_strong_password_here' >> .env
+# 或
+echo 'ADMIN_PASSWORD=your_strong_password_here' >> .env
+```
+
+设置后重启容器：
 
 ```powershell
-Set-Location D:\live-dashboard-main\packages\frontend
-bun install
-
-# 指向后端
-$env:NEXT_PUBLIC_API_BASE = "http://127.0.0.1:3000"
-
-# 避免与后端 3000 端口冲突
-bun run dev -- --port 3001
+docker compose up -d --build
 ```
 
-前端地址：`http://127.0.0.1:3001`
+查看当前是否已设置：
+
+Windows（PowerShell）：
+
+```powershell
+Get-Content .env | Select-String "ADMIN_TOKEN|ADMIN_PASSWORD"
+```
+
+Linux：
+
+```bash
+grep -E 'ADMIN_TOKEN|ADMIN_PASSWORD' .env
+```
+
+示例：
+
+```env
+ADMIN_TOKEN=your_strong_password_here
+# 或
+ADMIN_PASSWORD=your_strong_password_here
+```
+
+修改后重启：
+
+```powershell
+docker compose up -d --build
+```
 
 ---
 
-## 多人面板管理使用教程
+## 网页里管理多人面板（无需改 .env、无需重建）
 
-打开页面后，在「多人面板管理」里填写：
-- 管理 Token：`ADMIN_TOKEN`
-- 面板 ID：例如 `friend-1`
-- 显示名称：例如 `Alice`
-- 面板 URL：例如 `https://alice.example.com`
-- 描述：可选
+打开首页后，在“多人面板管理”区域：
 
-点击「添加 / 更新面板」。
+1. 输入管理密码（`ADMIN_TOKEN` 或 `ADMIN_PASSWORD` 的值）
+2. 填写面板信息（ID、名称、URL、描述可选）
+3. 点击“添加 / 更新面板”
+4. 删除时点击“删除 xxx”
 
-删除面板：
-- 在管理区底部点击「删除 xxx」。
-
-### 接口说明（后端）
-
-- `POST /api/config/dashboards`
-- `DELETE /api/config/dashboards`
-- Header: `Authorization: Bearer <ADMIN_TOKEN>`
+说明：
+- 新增/更新/删除会立刻生效。
+- 不需要修改 `.env`。
+- 不需要重新构建 Docker 镜像。
 
 ---
 
-## 常用运维命令
+## 常用命令
 
 ```powershell
 # 查看日志
 docker logs --tail 100 live_dashboard
 
-# 重启
+# 重启容器
 docker restart live_dashboard
 
 # 重新构建并启动
@@ -180,33 +199,30 @@ docker compose down
 
 ## 常见问题
 
-### Q1: 页面没有「多人面板管理」区块
+### 1) 网页里添加/删除面板失败
 
-1. 执行 `docker compose up -d --build`
-2. 强制刷新浏览器（Ctrl + F5）
-3. 确认访问的是当前容器端口（默认 3000）
+先检查：
+- 管理密码是否输入正确
+- `.env` 是否有 `ADMIN_TOKEN` 或 `ADMIN_PASSWORD`
 
-### Q2: 新增面板失败
+### 2) 看不到“多人面板管理”区域
 
-检查返回信息：
-- `ADMIN_TOKEN not configured on server`：后端没配置 `ADMIN_TOKEN`
-- `Unauthorized`：Token 不匹配
-- `Invalid dashboard payload`：ID/名称/URL 不合法
+执行：
 
-### Q3: Docker 构建报 `invalid file request ... node_modules/.bin/tsc`
+```powershell
+docker compose up -d --build
+```
 
-仓库需要有 `.dockerignore` 排除本地依赖目录。当前仓库已包含该文件。
+然后浏览器强制刷新（Ctrl+F5）。
+
+### 3) 只有网址的人能不能乱改？
+
+不能。
+
+因为新增/更新/删除必须带管理密码（后端鉴权），没密码会返回 401。
 
 ---
 
-## 文档索引
-
-- `README.md`：部署与多人面板管理主文档
-- `docs/android-agent.md`：Android Agent 说明
-- `deploy/windows-dockerdesktop-local.ps1`：Windows 本地启动脚本
-- `docker-compose.yml`：默认 Compose 配置
-- `.env.example`：环境变量模板
-
-## License
+## 许可证
 
 MIT

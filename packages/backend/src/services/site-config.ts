@@ -1,4 +1,4 @@
-import { getExternalDashboards } from "../db";
+import { getExternalDashboards, getHiddenExternalDashboardIds } from "../db";
 
 export interface SiteConfig {
   displayName: string;
@@ -129,12 +129,13 @@ function mergeDashboards(
 
 function getDashboards(): DashboardProfile[] {
   const raw = nonEmpty(process.env.EXTERNAL_DASHBOARDS);
+  const hiddenIds = new Set(getHiddenExternalDashboardIds());
   const fromDb = getExternalDashboards().map((record) => ({
     id: record.id,
     name: record.name,
     url: record.url,
     description: record.description,
-  }));
+  })).filter((dashboard) => !hiddenIds.has(dashboard.id));
 
   if (!raw) {
     return fromDb.length > 0 ? fromDb : DEFAULT_DASHBOARDS;
@@ -158,7 +159,9 @@ function getDashboards(): DashboardProfile[] {
     ? Array.from(uniqueDashboards.values())
     : DEFAULT_DASHBOARDS;
 
-  const merged = mergeDashboards(fromDb, fromEnv);
+  const visibleEnv = fromEnv.filter((dashboard) => !hiddenIds.has(dashboard.id));
+
+  const merged = mergeDashboards(fromDb, visibleEnv);
   return merged.length > 0 ? merged : DEFAULT_DASHBOARDS;
 }
 export function getSiteConfig(): SiteConfig {

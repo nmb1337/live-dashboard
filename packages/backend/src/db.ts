@@ -140,6 +140,13 @@ db.run(`
   )
 `);
 
+db.run(`
+  CREATE TABLE IF NOT EXISTS hidden_external_dashboards (
+    id TEXT PRIMARY KEY,
+    hidden_at TEXT NOT NULL DEFAULT (datetime('now'))
+  )
+`);
+
 // ── HMAC hash secret validation ──
 
 const HASH_SECRET = process.env.HASH_SECRET || "";
@@ -229,6 +236,23 @@ const deleteExternalDashboardStmt = db.prepare(`
   WHERE id = ?
 `);
 
+const getHiddenExternalDashboardIdsStmt = db.prepare(`
+  SELECT id
+  FROM hidden_external_dashboards
+`);
+
+const hideExternalDashboardStmt = db.prepare(`
+  INSERT INTO hidden_external_dashboards (id, hidden_at)
+  VALUES (?, datetime('now'))
+  ON CONFLICT(id) DO UPDATE SET
+    hidden_at = datetime('now')
+`);
+
+const unhideExternalDashboardStmt = db.prepare(`
+  DELETE FROM hidden_external_dashboards
+  WHERE id = ?
+`);
+
 export type ExternalDashboardRecord = {
   id: string;
   name: string;
@@ -247,10 +271,20 @@ export function upsertExternalDashboard(record: ExternalDashboardRecord): void {
     record.url,
     record.description ?? "",
   );
+  unhideExternalDashboardStmt.run(record.id);
 }
 
 export function deleteExternalDashboard(id: string): number {
   return deleteExternalDashboardStmt.run(id).changes;
+}
+
+export function getHiddenExternalDashboardIds(): string[] {
+  const rows = getHiddenExternalDashboardIdsStmt.all() as { id: string }[];
+  return rows.map((row) => row.id);
+}
+
+export function hideExternalDashboard(id: string): void {
+  hideExternalDashboardStmt.run(id);
 }
 
 export const upsertDeviceConsent = db.prepare(`

@@ -14,7 +14,6 @@ import HealthData from "@/components/HealthData";
 import SiteMetadataSync from "@/components/SiteMetadataSync";
 
 const SNAPSHOT_POLL_INTERVAL = 20_000;
-const ADMIN_TOKEN_STORAGE_KEY = "live_dashboard_admin_token";
 
 interface DashboardOption extends DashboardProfile {
   isPrimary: boolean;
@@ -51,20 +50,8 @@ function HomeInner() {
     setRuntimeDashboards(config.dashboards);
   }, [config.dashboards]);
 
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    const saved = window.localStorage.getItem(ADMIN_TOKEN_STORAGE_KEY);
-    if (saved) setAdminToken(saved);
-  }, []);
-
   const handleAdminTokenChange = useCallback((value: string) => {
     setAdminToken(value);
-    if (typeof window === "undefined") return;
-    if (value.trim()) {
-      window.localStorage.setItem(ADMIN_TOKEN_STORAGE_KEY, value.trim());
-    } else {
-      window.localStorage.removeItem(ADMIN_TOKEN_STORAGE_KEY);
-    }
   }, []);
 
   const refreshDashboardConfig = useCallback(async () => {
@@ -74,7 +61,7 @@ function HomeInner() {
 
   const handleDashboardCreate = useCallback(async (payload: DashboardProfile) => {
     if (!adminToken.trim()) {
-      setAdminStatus("请先填写管理 Token");
+      setAdminStatus("请先填写管理密码");
       return;
     }
 
@@ -82,7 +69,7 @@ function HomeInner() {
       setAdminStatus("正在保存面板...");
       const dashboards = await createDashboard(payload, adminToken.trim());
       setRuntimeDashboards(dashboards);
-      setAdminStatus("面板已保存");
+      setAdminStatus("面板已保存（立即生效，无需改 .env / 重建）");
     } catch (error) {
       const message = error instanceof Error ? error.message : "请检查 Token 和面板地址";
       setAdminStatus(`保存失败：${message}`);
@@ -91,7 +78,7 @@ function HomeInner() {
 
   const handleDashboardDelete = useCallback(async (id: string) => {
     if (!adminToken.trim()) {
-      setAdminStatus("请先填写管理 Token");
+      setAdminStatus("请先填写管理密码");
       return;
     }
 
@@ -99,7 +86,7 @@ function HomeInner() {
       setAdminStatus("正在删除面板...");
       const dashboards = await removeDashboard(id, adminToken.trim());
       setRuntimeDashboards(dashboards);
-      setAdminStatus("面板已删除");
+      setAdminStatus("面板已删除（立即生效，无需改 .env / 重建）");
     } catch (error) {
       const message = error instanceof Error ? error.message : "请检查 Token";
       setAdminStatus(`删除失败：${message}`);
@@ -550,10 +537,25 @@ function DashboardAdminPanel({
   onReload: () => void;
 }) {
   const [expanded, setExpanded] = useState(true);
+  const [unlocked, setUnlocked] = useState(false);
+  const [passwordInput, setPasswordInput] = useState("");
   const [id, setId] = useState("");
   const [name, setName] = useState("");
   const [url, setUrl] = useState("");
   const [description, setDescription] = useState("");
+
+  const handleUnlock = () => {
+    const password = passwordInput.trim();
+    if (!password) return;
+    onAdminTokenChange(password);
+    setUnlocked(true);
+  };
+
+  const handleLock = () => {
+    setUnlocked(false);
+    setPasswordInput("");
+    onAdminTokenChange("");
+  };
 
   return (
     <section className="mb-4 rounded-2xl border-2 border-[var(--color-accent)] bg-[var(--color-card)] px-4 py-3">
@@ -563,7 +565,7 @@ function DashboardAdminPanel({
             多人面板管理
           </p>
           <p className="text-xs text-[var(--color-text-muted)] mt-1">
-            前端展示 / 后端写入面板配置（需要 ADMIN_TOKEN）
+            网页直接添加/更新/删除面板，立即生效（需要管理密码）
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -581,74 +583,106 @@ function DashboardAdminPanel({
 
       {expanded && (
         <>
-          <div className="grid gap-2 md:grid-cols-2">
-            <input
-              value={adminToken}
-              onChange={(event) => onAdminTokenChange(event.target.value)}
-              placeholder="管理 Token（ADMIN_TOKEN）"
-              className="panel-chip w-full text-xs px-3 py-2"
-            />
-            <input
-              value={id}
-              onChange={(event) => setId(event.target.value)}
-              placeholder="面板 ID（如: friend-1）"
-              className="panel-chip w-full text-xs px-3 py-2"
-            />
-            <input
-              value={name}
-              onChange={(event) => setName(event.target.value)}
-              placeholder="显示名称"
-              className="panel-chip w-full text-xs px-3 py-2"
-            />
-            <input
-              value={url}
-              onChange={(event) => setUrl(event.target.value)}
-              placeholder="面板 URL（https://...）"
-              className="panel-chip w-full text-xs px-3 py-2"
-            />
-            <input
-              value={description}
-              onChange={(event) => setDescription(event.target.value)}
-              placeholder="描述（可选）"
-              className="panel-chip w-full text-xs px-3 py-2 md:col-span-2"
-            />
-          </div>
+          {!unlocked ? (
+            <>
+              <div className="grid gap-2 md:grid-cols-[1fr_auto]">
+                <input
+                  type="password"
+                  value={passwordInput}
+                  onChange={(event) => setPasswordInput(event.target.value)}
+                  placeholder="先输入管理密码（ADMIN_PASSWORD / ADMIN_TOKEN）"
+                  autoComplete="new-password"
+                  className="panel-chip w-full text-xs px-3 py-2"
+                />
+                <button
+                  type="button"
+                  onClick={handleUnlock}
+                  className="pill-btn text-xs px-3 py-1"
+                >
+                  解锁管理
+                </button>
+              </div>
+              <p className="text-xs text-[var(--color-text-muted)] mt-2">
+                解锁后才会显示添加/更新/删除按钮。
+              </p>
+            </>
+          ) : (
+            <>
+              <div className="flex items-center gap-2 mb-2">
+                <span className="text-xs text-[var(--color-text-muted)]">已解锁，可管理面板</span>
+                <button
+                  type="button"
+                  onClick={handleLock}
+                  className="pill-btn text-xs px-3 py-1"
+                >
+                  锁定
+                </button>
+              </div>
 
-          <div className="mt-2">
-            <button
-              type="button"
-              onClick={() => {
-                onCreate({
-                  id: id.trim(),
-                  name: name.trim(),
-                  url: url.trim(),
-                  description: description.trim() || undefined,
-                });
-              }}
-              className="pill-btn text-xs px-3 py-1"
-            >
-              添加 / 更新面板
-            </button>
-          </div>
+              <div className="grid gap-2 md:grid-cols-2">
+                <input
+                  value={id}
+                  onChange={(event) => setId(event.target.value)}
+                  placeholder="面板 ID（如: friend-1）"
+                  className="panel-chip w-full text-xs px-3 py-2"
+                />
+                <input
+                  value={name}
+                  onChange={(event) => setName(event.target.value)}
+                  placeholder="显示名称"
+                  className="panel-chip w-full text-xs px-3 py-2"
+                />
+                <input
+                  value={url}
+                  onChange={(event) => setUrl(event.target.value)}
+                  placeholder="面板 URL（https://...）"
+                  className="panel-chip w-full text-xs px-3 py-2"
+                />
+                <input
+                  value={description}
+                  onChange={(event) => setDescription(event.target.value)}
+                  placeholder="描述（可选）"
+                  className="panel-chip w-full text-xs px-3 py-2"
+                />
+              </div>
+
+              <div className="mt-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    onCreate({
+                      id: id.trim(),
+                      name: name.trim(),
+                      url: url.trim(),
+                      description: description.trim() || undefined,
+                    });
+                  }}
+                  className="pill-btn text-xs px-3 py-1"
+                >
+                  添加 / 更新面板
+                </button>
+              </div>
+
+              {dashboards.length > 0 && (
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {dashboards.map((dashboard) => (
+                    <button
+                      key={dashboard.id}
+                      type="button"
+                      onClick={() => onDelete(dashboard.id)}
+                      className="panel-chip text-xs px-3 py-1"
+                      title={`删除 ${dashboard.name}`}
+                    >
+                      删除 {dashboard.name}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </>
+          )}
 
           {adminStatus && (
             <p className="text-xs text-[var(--color-text-muted)] mt-2">{adminStatus}</p>
-          )}
-
-          {dashboards.length > 0 && (
-            <div className="mt-3 flex flex-wrap gap-2">
-              {dashboards.map((dashboard) => (
-                <button
-                  key={dashboard.id}
-                  type="button"
-                  onClick={() => onDelete(dashboard.id)}
-                  className="panel-chip text-xs px-3 py-1"
-                  title={`删除 ${dashboard.name}`}
-                >
-                  删除 {dashboard.name}
-                </button>
-              ))}
-            </div>
           )}
         </>
       )}

@@ -1,4 +1,6 @@
-const ADMIN_TOKEN = process.env.ADMIN_TOKEN?.trim() || "";
+import { timingSafeEqual } from "node:crypto";
+
+const ADMIN_SECRET = process.env.ADMIN_PASSWORD?.trim() || process.env.ADMIN_TOKEN?.trim() || "";
 
 function readToken(req: Request): string {
   const auth = req.headers.get("authorization") || "";
@@ -8,17 +10,28 @@ function readToken(req: Request): string {
 }
 
 export function ensureAdminAuthorized(req: Request): Response | null {
-  if (!ADMIN_TOKEN) {
+  if (!ADMIN_SECRET) {
     return Response.json(
-      { error: "ADMIN_TOKEN not configured on server" },
+      { error: "ADMIN_PASSWORD / ADMIN_TOKEN not configured on server" },
       { status: 503 },
     );
   }
 
   const token = readToken(req);
-  if (!token || token !== ADMIN_TOKEN) {
+  if (!token || !safeEqual(token, ADMIN_SECRET)) {
     return Response.json({ error: "Unauthorized" }, { status: 401 });
   }
 
   return null;
+}
+
+function safeEqual(left: string, right: string): boolean {
+  const leftBuffer = Buffer.from(left);
+  const rightBuffer = Buffer.from(right);
+
+  if (leftBuffer.length !== rightBuffer.length) {
+    return false;
+  }
+
+  return timingSafeEqual(leftBuffer, rightBuffer);
 }
