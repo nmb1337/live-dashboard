@@ -276,6 +276,18 @@ function buildAdminHeaders(adminToken: string): HeadersInit {
   };
 }
 
+async function parseApiError(res: Response): Promise<string> {
+  try {
+    const data = await res.json() as { error?: unknown };
+    if (typeof data.error === "string" && data.error.trim()) {
+      return data.error.trim();
+    }
+  } catch {
+    // Ignore JSON parse errors and fallback to status text.
+  }
+  return `HTTP ${res.status}`;
+}
+
 function parseDashboardsResponse(data: unknown): DashboardProfile[] {
   if (!data || typeof data !== "object") return [];
   const raw = (data as { dashboards?: unknown }).dashboards;
@@ -296,7 +308,7 @@ export async function createDashboard(
     cache: "no-store",
   });
 
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  if (!res.ok) throw new Error(await parseApiError(res));
   return parseDashboardsResponse(await res.json());
 }
 
@@ -308,6 +320,6 @@ export async function removeDashboard(id: string, adminToken: string): Promise<D
     cache: "no-store",
   });
 
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  if (!res.ok) throw new Error(await parseApiError(res));
   return parseDashboardsResponse(await res.json());
 }

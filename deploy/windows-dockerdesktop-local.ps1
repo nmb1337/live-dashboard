@@ -119,6 +119,7 @@ function Save-EnvMap {
 		"STATIC_DIR",
 		"DB_PATH",
 		"HASH_SECRET",
+		"ADMIN_TOKEN",
 		"DEVICE_TOKEN_1",
 		"DEVICE_TOKEN_2",
 		"DEVICE_TOKEN_3",
@@ -178,6 +179,9 @@ Ensure-DefaultValue -Map $envMap -Key "DB_PATH" -DefaultValue "/data/live-dashbo
 if (NeedsGeneratedValue ([string]($envMap["HASH_SECRET"]))) {
 	$envMap["HASH_SECRET"] = New-HexToken -Bytes 32
 }
+if (NeedsGeneratedValue ([string]($envMap["ADMIN_TOKEN"]))) {
+	$envMap["ADMIN_TOKEN"] = New-HexToken -Bytes 24
+}
 
 Ensure-DeviceToken -Map $envMap -Key "DEVICE_TOKEN_1" -DeviceId "pc-1" -DeviceName "My PC" -Platform "windows"
 Ensure-DeviceToken -Map $envMap -Key "DEVICE_TOKEN_2" -DeviceId "phone-1" -DeviceName "My Phone" -Platform "android"
@@ -188,7 +192,7 @@ Ensure-DefaultValue -Map $envMap -Key "SITE_TITLE" -DefaultValue "xuyihong Now"
 Ensure-DefaultValue -Map $envMap -Key "SITE_DESC" -DefaultValue "What is xuyihong doing right now?"
 Ensure-DefaultValue -Map $envMap -Key "SITE_FAVICON" -DefaultValue "/favicon.ico"
 
-$defaultDashboards = '[{"id":"aloys23","name":"DBJD-CR","url":"https://livedashboard.aloys23.link"},{"id":"ailucat","name":"894","url":"https://live.ailucat.top"},{"id":"fun91","name":"Monika","url":"https://live.91fun.asia"}]'
+$defaultDashboards = '[]'
 if (-not (Is-ValidDashboardsJson ([string]($envMap["EXTERNAL_DASHBOARDS"])))) {
 	$envMap["EXTERNAL_DASHBOARDS"] = $defaultDashboards
 }
