@@ -1,6 +1,6 @@
 # Live Dashboard
 
-这是一个可以实时展示“你正在用什么应用”的网页看板。
+这是一个可以实时展示“你正在用什么应用”的网页看板。示例:https://xuyihong.icu/   qq交流群1093496287
 
 你要的核心点先说结论：
 - 可以直接在网页里添加/更新/删除多人面板。
@@ -42,10 +42,53 @@ Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass -Force
 脚本会自动：
 - 生成/修复 `.env`
 - 生成设备 token
-- 生成管理密码（`ADMIN_TOKEN`）
+- 写入默认管理密码（`ADMIN_TOKEN=123456`，可自行修改）
 - 构建并启动容器
 
-### 3. 验证
+### 3. 手动启动（docker run）
+
+如果你不想用一键脚本，也可以手动部署。
+
+先在项目目录构建镜像：
+
+```powershell
+Set-Location D:\live-dashboard-main
+docker build -t live-dashboard:local .
+```
+
+Windows（PowerShell）先生成密钥：
+
+```powershell
+# 设备密钥（每台设备各生成一个，记下来）
+-join((1..16)|%{'{0:x2}'-f(Get-Random -Max 256)})
+
+# HASH_SECRET（服务端内部用，只需一个）
+-join((1..32)|%{'{0:x2}'-f(Get-Random -Max 256)})
+```
+
+然后运行容器（下面是你提供的示例）：
+
+```powershell
+docker run -d --name live-dashboard `
+	-p 3000:3000 `
+	-v dashboard_data:/data `
+	-e "HASH_SECRET=d21d3ab874d8d0f30f59885efa82dec0e470b837788495fd57198f9dbfdb7d17" `
+	-e "DEVICE_TOKEN_1=9efb4f39438e8e892006fef7ccac2cdb:pc-1:5050 5600x:windows" `
+	-e "DEVICE_TOKEN_2=a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6:phone-1:vivox200s:android" `
+	-e "DISPLAY_NAME=xuyihong" `
+	-e "SITE_TITLE=xuyihong Now" `
+	-e "SITE_DESC=What is xuyihong doing right now?" `
+	-e "ADMIN_TOKEN=123456" `
+	-e "EXTERNAL_DASHBOARDS=[{""id"":""aloys23"",""name"":""DBJD-CR"",""url"":""https://livedashboard.aloys23.link""},{""id"":""ailucat"",""name"":""八九四"",""url"":""https://live.ailucat.top""},{""id"":""fun91"",""name"":""Monika"",""url"":""https://live.91fun.asia""}]" `
+	live-dashboard:local
+```
+
+说明：
+- 设备密钥请替换为你自己生成的值，每台设备都要不同。
+- `HASH_SECRET` 只需要一个，用你自己生成的值替换示例值。
+- `ADMIN_TOKEN=123456` 是当前默认管理密码，建议上线后改为强密码。
+
+### 4. 验证
 
 ```powershell
 Invoke-RestMethod http://127.0.0.1:3000/api/health
@@ -77,16 +120,6 @@ openssl rand -hex 16
 
 # HASH_SECRET（服务端内部用，只需一个）
 openssl rand -hex 32
-```
-
-Windows（PowerShell）：
-
-```powershell
-# 设备密钥
--join((1..16)|%{'{0:x2}'-f(Get-Random -Max 256)})
-
-# HASH_SECRET
--join((1..32)|%{'{0:x2}'-f(Get-Random -Max 256)})
 ```
 
 说明：
