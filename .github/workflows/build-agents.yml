@@ -148,8 +148,59 @@ jobs:
           name: android-agent
           path: live-dashboard-android-agent.apk
 
+  build-windows-dotnet:
+    if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch'
+    runs-on: windows-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.android_ref || 'main' }}
+      - name: Set up .NET SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+      - name: Resolve Windows package version
+        id: winver
+        shell: pwsh
+        run: |
+          if ("${{ github.ref }}" -like "refs/tags/*") {
+            $version = "${{ github.ref_name }}"
+          } else {
+            $version = "dev-${{ github.run_number }}"
+          }
+          "version=$version" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+      - name: Build Windows package zip
+        shell: pwsh
+        working-directory: packages/windows-agent
+        run: |
+          .\build-release.ps1 `
+            -Version "${{ steps.winver.outputs.version }}" `
+            -Runtime "win-x64" `
+            -PackageName "live-dashboard-windows-agent" `
+            -DisplayName "Live Dashboard Windows Agent"
+      - name: Resolve Windows zip artifact
+        id: winzip
+        shell: pwsh
+        run: |
+          $zip = Get-ChildItem -Path "packages/windows-agent/dist" -Filter "live-dashboard-windows-agent-*.zip" -File |
+            Sort-Object LastWriteTime -Descending |
+            Select-Object -First 1
+
+          if (-not $zip) {
+            throw "No Windows zip package found under packages/windows-agent/dist"
+          }
+
+          "path=$($zip.FullName)" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+          "name=$($zip.Name)" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows-agent-dotnet
+          path: ${{ steps.winzip.outputs.path }}
+
   release:
-    needs: [build-android]
+    needs: [build-android, build-windows-dotnet]
     if: startsWith(github.ref, 'refs/tags/')
     runs-on: ubuntu-latest
     permissions:
@@ -159,10 +210,16 @@ jobs:
         with:
           name: android-agent
           path: android-agent
+      - uses: actions/download-artifact@v4
+        with:
+          name: windows-agent-dotnet
+          path: windows-agent
       - name: Prepare release assets
         run: |
           mv android-agent/live-dashboard-android-agent.apk .
+          cp windows-agent/*.zip .
       - uses: softprops/action-gh-release@v2
         with:
           files: |
             live-dashboard-android-agent.apk
+            live-dashboard-windows-agent-*.zip
