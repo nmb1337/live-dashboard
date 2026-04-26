@@ -145,7 +145,7 @@ private fun AgentScreen(settingsStore: SettingsStore) {
             modifier = Modifier.fillMaxWidth(),
             label = { Text("服务器地址") },
             singleLine = true,
-            placeholder = { Text("https://example.com") }
+            placeholder = { Text("http://192.168.1.10:3000 或 https://example.com") }
         )
 
         OutlinedTextField(
@@ -337,7 +337,7 @@ private fun AgentScreen(settingsStore: SettingsStore) {
                     val heartbeat = heartbeatText.toIntOrNull()?.coerceIn(10, 50) ?: 30
                     val normalizedServer = serverUrl.trim().trimEnd('/')
                     if (!isServerUrlAllowed(normalizedServer)) {
-                        statusText = "服务器地址必须使用 HTTPS（localhost 除外）。"
+                        statusText = "服务器地址必须是有效的 http:// 或 https:// 地址。"
                         settingsStore.appendLog("保存设置失败：服务器地址不符合要求")
                         refreshLogs()
                         return@Button
@@ -494,8 +494,7 @@ private fun isServerUrlAllowed(value: String): Boolean {
         val uri = URI(value)
         val scheme = uri.scheme?.lowercase() ?: return false
         val host = uri.host?.lowercase() ?: return false
-        val localhost = host == "localhost" || host == "127.0.0.1"
-        scheme == "https" || localhost
+        (scheme == "http" || scheme == "https") && host.isNotBlank()
     } catch (_: Exception) {
         false
     }

@@ -147,6 +147,33 @@ db.run(`
   )
 `);
 
+// ── Runtime-managed device tokens (for admin panel edits) ──
+
+db.run(`
+  CREATE TABLE IF NOT EXISTS runtime_device_configs (
+    device_id TEXT PRIMARY KEY,
+    token TEXT NOT NULL UNIQUE,
+    device_name TEXT NOT NULL,
+    platform TEXT NOT NULL,
+    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+  )
+`);
+
+db.run(`
+  CREATE INDEX IF NOT EXISTS idx_runtime_device_configs_platform
+  ON runtime_device_configs(platform)
+`);
+
+// ── Runtime-managed site settings (for admin panel edits) ──
+
+db.run(`
+  CREATE TABLE IF NOT EXISTS runtime_site_settings (
+    setting_key TEXT PRIMARY KEY,
+    setting_value TEXT NOT NULL,
+    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+  )
+`);
+
 // ── HMAC hash secret validation ──
 
 const HASH_SECRET = process.env.HASH_SECRET || "";
@@ -253,11 +280,62 @@ const unhideExternalDashboardStmt = db.prepare(`
   WHERE id = ?
 `);
 
+const getRuntimeDeviceConfigsStmt = db.prepare(`
+  SELECT token, device_id, device_name, platform
+  FROM runtime_device_configs
+  ORDER BY device_id ASC
+`);
+
+const deleteRuntimeDeviceByTokenForOtherDeviceStmt = db.prepare(`
+  DELETE FROM runtime_device_configs
+  WHERE token = ? AND device_id <> ?
+`);
+
+const upsertRuntimeDeviceConfigStmt = db.prepare(`
+  INSERT INTO runtime_device_configs (token, device_id, device_name, platform, updated_at)
+  VALUES (?, ?, ?, ?, datetime('now'))
+  ON CONFLICT(device_id) DO UPDATE SET
+    token = excluded.token,
+    device_name = excluded.device_name,
+    platform = excluded.platform,
+    updated_at = datetime('now')
+`);
+
+const deleteRuntimeDeviceConfigStmt = db.prepare(`
+  DELETE FROM runtime_device_configs
+  WHERE device_id = ?
+`);
+
+const getRuntimeSiteSettingsStmt = db.prepare(`
+  SELECT setting_key, setting_value
+  FROM runtime_site_settings
+`);
+
+const upsertRuntimeSiteSettingStmt = db.prepare(`
+  INSERT INTO runtime_site_settings (setting_key, setting_value, updated_at)
+  VALUES (?, ?, datetime('now'))
+  ON CONFLICT(setting_key) DO UPDATE SET
+    setting_value = excluded.setting_value,
+    updated_at = datetime('now')
+`);
+
+const deleteRuntimeSiteSettingStmt = db.prepare(`
+  DELETE FROM runtime_site_settings
+  WHERE setting_key = ?
+`);
+
 export type ExternalDashboardRecord = {
   id: string;
   name: string;
   url: string;
   description?: string;
+};
+
+export type RuntimeDeviceConfigRecord = {
+  token: string;
+  device_id: string;
+  device_name: string;
+  platform: string;
 };
 
 export function getExternalDashboards(): ExternalDashboardRecord[] {
@@ -285,6 +363,49 @@ export function getHiddenExternalDashboardIds(): string[] {
 
 export function hideExternalDashboard(id: string): void {
   hideExternalDashboardStmt.run(id);
+}
+
+export function getRuntimeDeviceConfigs(): RuntimeDeviceConfigRecord[] {
+  return getRuntimeDeviceConfigsStmt.all() as RuntimeDeviceConfigRecord[];
+}
+
+export function upsertRuntimeDeviceConfig(record: RuntimeDeviceConfigRecord): void {
+  const tx = db.transaction((input: RuntimeDeviceConfigRecord) => {
+    deleteRuntimeDeviceByTokenForOtherDeviceStmt.run(input.token, input.device_id);
+    upsertRuntimeDeviceConfigStmt.run(
+      input.token,
+      input.device_id,
+      input.device_name,
+      input.platform,
+    );
+  });
+
+  tx(record);
+}
+
+export function deleteRuntimeDeviceConfig(deviceId: string): number {
+  return deleteRuntimeDeviceConfigStmt.run(deviceId).changes;
+}
+
+export function getRuntimeSiteSettings(): Record<string, string> {
+  const rows = getRuntimeSiteSettingsStmt.all() as {
+    setting_key: string;
+    setting_value: string;
+  }[];
+
+  const result: Record<string, string> = {};
+  for (const row of rows) {
+    result[row.setting_key] = row.setting_value;
+  }
+  return result;
+}
+
+export function upsertRuntimeSiteSetting(key: string, value: string): void {
+  upsertRuntimeSiteSettingStmt.run(key, value);
+}
+
+export function deleteRuntimeSiteSetting(key: string): void {
+  deleteRuntimeSiteSettingStmt.run(key);
 }
 
 export const upsertDeviceConsent = db.prepare(`

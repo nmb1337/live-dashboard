@@ -8,7 +8,16 @@ import { handleHealth } from "./routes/health";
 import { handleHealthData, handleHealthDataQuery } from "./routes/health-data";
 import { handleHealthWebhook } from "./routes/health-webhook";
 import { handleConsentGet, handleConsentPost } from "./routes/consent";
-import { handleAdminVerify, handleConfig, handleDashboardCreate, handleDashboardDelete } from "./routes/config";
+import {
+  handleAdminConfigGet,
+  handleAdminDeviceDelete,
+  handleAdminDeviceUpsert,
+  handleAdminSiteUpdate,
+  handleAdminVerify,
+  handleConfig,
+  handleDashboardCreate,
+  handleDashboardDelete,
+} from "./routes/config";
 import { handleProxy } from "./routes/proxy";
 import { injectSiteConfig } from "./services/site-config";
 import { cleanupUnconfiguredDeviceData } from "./db";
@@ -107,6 +116,14 @@ const server = Bun.serve({
         response = handleConfig();
       } else if (pathname === "/api/config/verify" && req.method === "POST") {
         response = handleAdminVerify(req);
+      } else if (pathname === "/api/config/admin" && req.method === "GET") {
+        response = handleAdminConfigGet(req);
+      } else if (pathname === "/api/config/site" && req.method === "POST") {
+        response = await handleAdminSiteUpdate(req);
+      } else if (pathname === "/api/config/devices" && req.method === "POST") {
+        response = await handleAdminDeviceUpsert(req);
+      } else if (pathname === "/api/config/devices" && req.method === "DELETE") {
+        response = await handleAdminDeviceDelete(req);
       } else if (pathname === "/api/config/dashboards" && req.method === "POST") {
         response = await handleDashboardCreate(req);
       } else if (pathname === "/api/config/dashboards" && req.method === "DELETE") {

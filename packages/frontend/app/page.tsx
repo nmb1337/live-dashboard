@@ -3,8 +3,26 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useDashboard } from "@/hooks/useDashboard";
 import { useConfig, useConfigLoader, ConfigContext } from "@/hooks/useConfig";
-import type { CurrentResponse, DashboardProfile, DeviceState } from "@/lib/api";
-import { createDashboard, fetchConfig, fetchCurrent, fetchHealthData, removeDashboard, verifyAdminToken } from "@/lib/api";
+import type {
+  AdminDeviceConfig,
+  AdminSiteConfig,
+  CurrentResponse,
+  DashboardProfile,
+  DeviceState,
+  SiteConfig,
+} from "@/lib/api";
+import {
+  createDashboard,
+  fetchAdminConfig,
+  fetchConfig,
+  fetchCurrent,
+  fetchHealthData,
+  removeAdminDeviceConfig,
+  removeDashboard,
+  updateAdminSiteConfig,
+  upsertAdminDeviceConfig,
+  verifyAdminToken,
+} from "@/lib/api";
 import Header from "@/components/Header";
 import CurrentStatus from "@/components/CurrentStatus";
 import DeviceCard from "@/components/DeviceCard";
@@ -30,20 +48,39 @@ interface DashboardSnapshot extends DashboardOption {
 
 export default function Home() {
   const config = useConfigLoader();
+  const [runtimeConfig, setRuntimeConfig] = useState<SiteConfig>(config);
+
+  useEffect(() => {
+    setRuntimeConfig(config);
+  }, [config]);
+
+  const handleSiteConfigUpdated = useCallback((site: AdminSiteConfig) => {
+    setRuntimeConfig((prev) => ({
+      ...prev,
+      displayName: site.displayName,
+      siteTitle: site.siteTitle,
+      siteDescription: site.siteDescription,
+    }));
+  }, []);
 
   return (
-    <ConfigContext.Provider value={config}>
+    <ConfigContext.Provider value={runtimeConfig}>
       <SiteMetadataSync />
-      <HomeInner />
+      <HomeInner onSiteConfigUpdated={handleSiteConfigUpdated} />
     </ConfigContext.Provider>
   );
 }
 
-function HomeInner() {
+function HomeInner({
+  onSiteConfigUpdated,
+}: {
+  onSiteConfigUpdated: (site: AdminSiteConfig) => void;
+}) {
   const config = useConfig();
   const { displayName } = config;
   const [runtimeDashboards, setRuntimeDashboards] = useState<DashboardProfile[]>(config.dashboards);
   const [adminToken, setAdminToken] = useState("");
+  const [adminDevices, setAdminDevices] = useState<AdminDeviceConfig[]>([]);
   const [adminStatus, setAdminStatus] = useState<string | null>(null);
 
   useEffect(() => {
@@ -52,6 +89,23 @@ function HomeInner() {
 
   const handleAdminTokenChange = useCallback((value: string) => {
     setAdminToken(value);
+  }, []);
+
+  const loadAdminConfig = useCallback(async (token: string) => {
+    const adminConfig = await fetchAdminConfig(token);
+    setAdminDevices(adminConfig.devices);
+    onSiteConfigUpdated(adminConfig.site);
+  }, [onSiteConfigUpdated]);
+
+  const handleAdminUnlock = useCallback(async (token: string) => {
+    const normalized = token.trim();
+    setAdminToken(normalized);
+    await loadAdminConfig(normalized);
+  }, [loadAdminConfig]);
+
+  const handleAdminLock = useCallback(() => {
+    setAdminToken("");
+    setAdminDevices([]);
   }, []);
 
   const refreshDashboardConfig = useCallback(async () => {
@@ -96,11 +150,70 @@ function HomeInner() {
   const handleDashboardReload = useCallback(async () => {
     try {
       await refreshDashboardConfig();
-      setAdminStatus("面板列表已刷新");
+      if (adminToken.trim()) {
+        await loadAdminConfig(adminToken.trim());
+      }
+      setAdminStatus("配置已刷新");
     } catch {
       setAdminStatus("刷新失败");
     }
-  }, [refreshDashboardConfig]);
+  }, [adminToken, loadAdminConfig, refreshDashboardConfig]);
+
+  const handleSiteSave = useCallback(async (payload: AdminSiteConfig) => {
+    if (!adminToken.trim()) {
+      setAdminStatus("请先填写管理密码");
+      return;
+    }
+
+    try {
+      setAdminStatus("正在保存网页名称...");
+      const site = await updateAdminSiteConfig(payload, adminToken.trim());
+      onSiteConfigUpdated(site);
+      setAdminStatus("网页名称已更新");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "请检查 Token";
+      setAdminStatus(`网页名称保存失败：${message}`);
+    }
+  }, [adminToken, onSiteConfigUpdated]);
+
+  const handleDeviceSave = useCallback(async (payload: {
+    token: string;
+    device_id: string;
+    device_name: string;
+    platform: "windows" | "android" | "macos";
+  }) => {
+    if (!adminToken.trim()) {
+      setAdminStatus("请先填写管理密码");
+      return;
+    }
+
+    try {
+      setAdminStatus("正在保存设备配置...");
+      const devices = await upsertAdminDeviceConfig(payload, adminToken.trim());
+      setAdminDevices(devices);
+      setAdminStatus("设备 token/名称已更新");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "请检查 Token";
+      setAdminStatus(`设备配置保存失败：${message}`);
+    }
+  }, [adminToken]);
+
+  const handleDeviceDelete = useCallback(async (deviceId: string) => {
+    if (!adminToken.trim()) {
+      setAdminStatus("请先填写管理密码");
+      return;
+    }
+
+    try {
+      setAdminStatus("正在删除运行时设备覆盖...");
+      const devices = await removeAdminDeviceConfig(deviceId, adminToken.trim());
+      setAdminDevices(devices);
+      setAdminStatus("运行时设备覆盖已删除");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "请检查 Token";
+      setAdminStatus(`删除失败：${message}`);
+    }
+  }, [adminToken]);
 
   const dashboards = useMemo<DashboardOption[]>(() => {
     return [
@@ -295,12 +408,23 @@ function HomeInner() {
 
       <DashboardAdminPanel
         dashboards={dashboards.filter((item) => !item.isPrimary)}
+        siteConfig={{
+          displayName: config.displayName,
+          siteTitle: config.siteTitle,
+          siteDescription: config.siteDescription,
+        }}
+        devices={adminDevices}
         adminToken={adminToken}
         adminStatus={adminStatus}
         onAdminTokenChange={handleAdminTokenChange}
+        onAdminUnlock={handleAdminUnlock}
+        onAdminLock={handleAdminLock}
         onCreate={handleDashboardCreate}
         onDelete={handleDashboardDelete}
         onReload={handleDashboardReload}
+        onSaveSite={handleSiteSave}
+        onSaveDevice={handleDeviceSave}
+        onDeleteDevice={handleDeviceDelete}
       />
 
       <DashboardSwitcher
@@ -521,19 +645,38 @@ function DashboardSwitcher({
 
 function DashboardAdminPanel({
   dashboards,
+  siteConfig,
+  devices,
   adminToken,
   adminStatus,
   onAdminTokenChange,
+  onAdminUnlock,
+  onAdminLock,
   onCreate,
   onDelete,
+  onSaveSite,
+  onSaveDevice,
+  onDeleteDevice,
   onReload,
 }: {
   dashboards: DashboardProfile[];
+  siteConfig: AdminSiteConfig;
+  devices: AdminDeviceConfig[];
   adminToken: string;
   adminStatus: string | null;
   onAdminTokenChange: (token: string) => void;
+  onAdminUnlock: (token: string) => Promise<void>;
+  onAdminLock: () => void;
   onCreate: (payload: DashboardProfile) => void;
   onDelete: (id: string) => void;
+  onSaveSite: (payload: AdminSiteConfig) => void;
+  onSaveDevice: (payload: {
+    token: string;
+    device_id: string;
+    device_name: string;
+    platform: "windows" | "android" | "macos";
+  }) => void;
+  onDeleteDevice: (deviceId: string) => void;
   onReload: () => void;
 }) {
   const [expanded, setExpanded] = useState(true);
@@ -545,6 +688,19 @@ function DashboardAdminPanel({
   const [name, setName] = useState("");
   const [url, setUrl] = useState("");
   const [description, setDescription] = useState("");
+  const [siteDisplayName, setSiteDisplayName] = useState(siteConfig.displayName);
+  const [siteTitle, setSiteTitle] = useState(siteConfig.siteTitle);
+  const [siteDescription, setSiteDescription] = useState(siteConfig.siteDescription);
+  const [deviceToken, setDeviceToken] = useState("");
+  const [deviceId, setDeviceId] = useState("");
+  const [deviceName, setDeviceName] = useState("");
+  const [devicePlatform, setDevicePlatform] = useState<"windows" | "android" | "macos">("windows");
+
+  useEffect(() => {
+    setSiteDisplayName(siteConfig.displayName);
+    setSiteTitle(siteConfig.siteTitle);
+    setSiteDescription(siteConfig.siteDescription);
+  }, [siteConfig.displayName, siteConfig.siteDescription, siteConfig.siteTitle]);
 
   const handleUnlock = async () => {
     const password = passwordInput.trim();
@@ -557,7 +713,7 @@ function DashboardAdminPanel({
     setUnlockStatus("正在验证管理密码...");
     try {
       await verifyAdminToken(password);
-      onAdminTokenChange(password);
+      await onAdminUnlock(password);
       setUnlocked(true);
       setUnlockStatus("管理密码验证成功");
     } catch (error) {
@@ -574,6 +730,14 @@ function DashboardAdminPanel({
     setPasswordInput("");
     setUnlockStatus(null);
     onAdminTokenChange("");
+    onAdminLock();
+  };
+
+  const applyDeviceToForm = (device: AdminDeviceConfig) => {
+    setDeviceToken(device.token);
+    setDeviceId(device.device_id);
+    setDeviceName(device.device_name);
+    setDevicePlatform(device.platform);
   };
 
   return (
@@ -584,7 +748,7 @@ function DashboardAdminPanel({
             多人面板管理
           </p>
           <p className="text-xs text-[var(--color-text-muted)] mt-1">
-            网页直接添加/更新/删除面板，立即生效（需要管理密码）
+            网页直接管理面板、设备 token/名称、网页名称（需要管理密码）
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -706,6 +870,143 @@ function DashboardAdminPanel({
                     >
                       删除 {dashboard.name}
                     </button>
+                  ))}
+                </div>
+              )}
+
+              <div className="separator-dashed my-3" />
+              <p className="text-xs font-bold uppercase tracking-[0.2em] text-[var(--color-text-muted)] mb-2">
+                网页名称配置
+              </p>
+              <div className="grid gap-2 md:grid-cols-2">
+                <input
+                  value={siteDisplayName}
+                  onChange={(event) => setSiteDisplayName(event.target.value)}
+                  placeholder="主面板显示名（displayName）"
+                  className="panel-chip w-full text-xs px-3 py-2"
+                />
+                <input
+                  value={siteTitle}
+                  onChange={(event) => setSiteTitle(event.target.value)}
+                  placeholder="网页标题（siteTitle）"
+                  className="panel-chip w-full text-xs px-3 py-2"
+                />
+                <input
+                  value={siteDescription}
+                  onChange={(event) => setSiteDescription(event.target.value)}
+                  placeholder="网页描述（siteDescription）"
+                  className="panel-chip w-full text-xs px-3 py-2 md:col-span-2"
+                />
+              </div>
+              <div className="mt-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    onSaveSite({
+                      displayName: siteDisplayName,
+                      siteTitle,
+                      siteDescription,
+                    });
+                  }}
+                  className="pill-btn text-xs px-3 py-1"
+                >
+                  保存网页名称
+                </button>
+              </div>
+
+              <div className="separator-dashed my-3" />
+              <p className="text-xs font-bold uppercase tracking-[0.2em] text-[var(--color-text-muted)] mb-2">
+                设备 Token 与名称
+              </p>
+
+              <div className="grid gap-2 md:grid-cols-2">
+                <input
+                  value={deviceId}
+                  onChange={(event) => setDeviceId(event.target.value)}
+                  placeholder="设备 ID（如: phone-1）"
+                  className="panel-chip w-full text-xs px-3 py-2"
+                />
+                <input
+                  value={deviceName}
+                  onChange={(event) => setDeviceName(event.target.value)}
+                  placeholder="设备名称（如: Vivo X200）"
+                  className="panel-chip w-full text-xs px-3 py-2"
+                />
+                <input
+                  value={deviceToken}
+                  onChange={(event) => setDeviceToken(event.target.value)}
+                  placeholder="设备 Token"
+                  className="panel-chip w-full text-xs px-3 py-2"
+                />
+                <select
+                  value={devicePlatform}
+                  onChange={(event) => setDevicePlatform(event.target.value as "windows" | "android" | "macos")}
+                  className="panel-chip w-full text-xs px-3 py-2"
+                >
+                  <option value="windows">windows</option>
+                  <option value="android">android</option>
+                  <option value="macos">macos</option>
+                </select>
+              </div>
+
+              <div className="mt-2 flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    onSaveDevice({
+                      token: deviceToken.trim(),
+                      device_id: deviceId.trim(),
+                      device_name: deviceName.trim(),
+                      platform: devicePlatform,
+                    });
+                  }}
+                  className="pill-btn text-xs px-3 py-1"
+                >
+                  保存设备配置
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setDeviceToken("");
+                    setDeviceId("");
+                    setDeviceName("");
+                    setDevicePlatform("windows");
+                  }}
+                  className="pill-btn text-xs px-3 py-1"
+                >
+                  清空输入
+                </button>
+              </div>
+
+              {devices.length > 0 && (
+                <div className="mt-3 space-y-2">
+                  {devices.map((device) => (
+                    <div
+                      key={`${device.source}-${device.device_id}`}
+                      className="panel-chip flex flex-wrap items-center justify-between gap-2 text-xs px-3 py-2"
+                    >
+                      <span>
+                        {device.device_name} ({device.device_id}) · {device.platform} · {device.source}
+                      </span>
+                      <div className="flex gap-2">
+                        <button
+                          type="button"
+                          onClick={() => applyDeviceToForm(device)}
+                          className="pill-btn text-xs px-2 py-1"
+                        >
+                          编辑
+                        </button>
+                        {device.source === "runtime" && (
+                          <button
+                            type="button"
+                            onClick={() => onDeleteDevice(device.device_id)}
+                            className="pill-btn text-xs px-2 py-1"
+                          >
+                            删除覆盖
+                          </button>
+                        )}
+                      </div>
+                    </div>
                   ))}
                 </div>
               )}

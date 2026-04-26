@@ -1,4 +1,10 @@
-import { getExternalDashboards, getHiddenExternalDashboardIds } from "../db";
+import {
+  deleteRuntimeSiteSetting,
+  getExternalDashboards,
+  getHiddenExternalDashboardIds,
+  getRuntimeSiteSettings,
+  upsertRuntimeSiteSetting,
+} from "../db";
 
 export interface SiteConfig {
   displayName: string;
@@ -25,6 +31,9 @@ const DEFAULT_FAVICON = "/favicon.ico";
 const SCRIPT_TAG_PATTERN = /<script\b[^>]*>[\s\S]*?<\/script>/gi;
 const DEFAULT_DASHBOARDS: DashboardProfile[] = [];
 const RESERVED_DASHBOARD_ID = "local";
+const RUNTIME_DISPLAY_NAME_KEY = "display_name";
+const RUNTIME_SITE_TITLE_KEY = "site_title";
+const RUNTIME_SITE_DESC_KEY = "site_description";
 
 function nonEmpty(value: string | undefined): string | undefined {
   const trimmed = value?.trim();
@@ -172,10 +181,19 @@ function getDashboards(): DashboardProfile[] {
   return merged.length > 0 ? merged : DEFAULT_DASHBOARDS;
 }
 export function getSiteConfig(): SiteConfig {
-  const displayName = nonEmpty(process.env.DISPLAY_NAME) ?? DEFAULT_DISPLAY_NAME;
-  const siteTitle = nonEmpty(process.env.SITE_TITLE) ?? `${displayName} Now`;
+  const runtimeSettings = getRuntimeSiteSettings();
+  const displayName =
+    nonEmpty(runtimeSettings[RUNTIME_DISPLAY_NAME_KEY]) ??
+    nonEmpty(process.env.DISPLAY_NAME) ??
+    DEFAULT_DISPLAY_NAME;
+  const siteTitle =
+    nonEmpty(runtimeSettings[RUNTIME_SITE_TITLE_KEY]) ??
+    nonEmpty(process.env.SITE_TITLE) ??
+    `${displayName} Now`;
   const siteDescription =
-    nonEmpty(process.env.SITE_DESC) ?? `What is ${displayName} doing right now?`;
+    nonEmpty(runtimeSettings[RUNTIME_SITE_DESC_KEY]) ??
+    nonEmpty(process.env.SITE_DESC) ??
+    `What is ${displayName} doing right now?`;
   const rawFavicon = nonEmpty(process.env.SITE_FAVICON) ?? DEFAULT_FAVICON;
 
   return {
@@ -185,6 +203,53 @@ export function getSiteConfig(): SiteConfig {
     siteFavicon: isValidFaviconUrl(rawFavicon) ? rawFavicon : DEFAULT_FAVICON,
     dashboards: getDashboards(),
   };
+}
+
+function updateRuntimeStringSetting(
+  key: string,
+  value: unknown,
+  maxLength: number,
+): boolean {
+  if (value === undefined) return true;
+  if (typeof value !== "string") return false;
+
+  const trimmed = value.trim();
+  if (!trimmed) {
+    deleteRuntimeSiteSetting(key);
+    return true;
+  }
+
+  upsertRuntimeSiteSetting(key, trimmed.slice(0, maxLength));
+  return true;
+}
+
+export function updateSiteConfigFromAdmin(input: unknown): SiteConfig | null {
+  if (!input || typeof input !== "object" || Array.isArray(input)) {
+    return null;
+  }
+
+  const payload = input as Record<string, unknown>;
+  const isDisplayNameOk = updateRuntimeStringSetting(
+    RUNTIME_DISPLAY_NAME_KEY,
+    payload.displayName,
+    64,
+  );
+  const isSiteTitleOk = updateRuntimeStringSetting(
+    RUNTIME_SITE_TITLE_KEY,
+    payload.siteTitle,
+    120,
+  );
+  const isSiteDescriptionOk = updateRuntimeStringSetting(
+    RUNTIME_SITE_DESC_KEY,
+    payload.siteDescription,
+    240,
+  );
+
+  if (!isDisplayNameOk || !isSiteTitleOk || !isSiteDescriptionOk) {
+    return null;
+  }
+
+  return getSiteConfig();
 }
 
 function escapeHtml(value: string): string {

@@ -118,8 +118,7 @@ object ApiReporter {
             val uri = URI(candidate)
             val scheme = uri.scheme?.lowercase() ?: return null
             val host = uri.host?.lowercase() ?: return null
-            val isLocalhost = host == "localhost" || host == "127.0.0.1"
-            if (scheme != "https" && !isLocalhost) return null
+            if ((scheme != "https" && scheme != "http") || host.isBlank()) return null
             candidate
         } catch (_: Exception) {
             null

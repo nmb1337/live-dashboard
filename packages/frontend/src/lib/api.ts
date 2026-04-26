@@ -21,6 +21,38 @@ export interface DashboardMutationPayload {
   description?: string;
 }
 
+export interface AdminSiteConfig {
+  displayName: string;
+  siteTitle: string;
+  siteDescription: string;
+}
+
+export interface AdminSiteConfigUpdate {
+  displayName?: string;
+  siteTitle?: string;
+  siteDescription?: string;
+}
+
+export interface AdminDeviceConfig {
+  token: string;
+  device_id: string;
+  device_name: string;
+  platform: "windows" | "android" | "macos";
+  source: "env" | "runtime";
+}
+
+export interface AdminDeviceConfigMutation {
+  token: string;
+  device_id: string;
+  device_name: string;
+  platform: "windows" | "android" | "macos";
+}
+
+export interface AdminConfigResponse {
+  site: AdminSiteConfig;
+  devices: AdminDeviceConfig[];
+}
+
 function normalizeBaseUrl(baseUrl?: string): string {
   const target = (baseUrl ?? API_BASE).trim();
   return target.replace(/\/$/, "");
@@ -297,6 +329,62 @@ function parseDashboardsResponse(data: unknown): DashboardProfile[] {
     .filter((item): item is DashboardProfile => !!item);
 }
 
+function normalizeAdminSiteConfig(value: unknown): AdminSiteConfig | null {
+  if (!value || typeof value !== "object") return null;
+  const record = value as Record<string, unknown>;
+  if (
+    typeof record.displayName !== "string" ||
+    typeof record.siteTitle !== "string" ||
+    typeof record.siteDescription !== "string"
+  ) {
+    return null;
+  }
+
+  return {
+    displayName: record.displayName,
+    siteTitle: record.siteTitle,
+    siteDescription: record.siteDescription,
+  };
+}
+
+function normalizeAdminDeviceConfig(value: unknown): AdminDeviceConfig | null {
+  if (!value || typeof value !== "object") return null;
+  const record = value as Record<string, unknown>;
+  if (
+    typeof record.token !== "string" ||
+    typeof record.device_id !== "string" ||
+    typeof record.device_name !== "string" ||
+    typeof record.platform !== "string" ||
+    typeof record.source !== "string"
+  ) {
+    return null;
+  }
+
+  const isPlatformValid =
+    record.platform === "windows" ||
+    record.platform === "android" ||
+    record.platform === "macos";
+  const isSourceValid = record.source === "env" || record.source === "runtime";
+  if (!isPlatformValid || !isSourceValid) return null;
+
+  return {
+    token: record.token,
+    device_id: record.device_id,
+    device_name: record.device_name,
+    platform: record.platform,
+    source: record.source,
+  };
+}
+
+function parseAdminDevicesResponse(data: unknown): AdminDeviceConfig[] {
+  if (!data || typeof data !== "object") return [];
+  const raw = (data as { devices?: unknown }).devices;
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .map((item: unknown) => normalizeAdminDeviceConfig(item))
+    .filter((item): item is AdminDeviceConfig => !!item);
+}
+
 export async function createDashboard(
   payload: DashboardMutationPayload,
   adminToken: string,
@@ -332,4 +420,72 @@ export async function removeDashboard(id: string, adminToken: string): Promise<D
 
   if (!res.ok) throw new Error(await parseApiError(res));
   return parseDashboardsResponse(await res.json());
+}
+
+export async function fetchAdminConfig(adminToken: string): Promise<AdminConfigResponse> {
+  const res = await fetch(buildApiUrl("/api/config/admin"), {
+    method: "GET",
+    headers: buildAdminHeaders(adminToken),
+    cache: "no-store",
+  });
+
+  if (!res.ok) throw new Error(await parseApiError(res));
+
+  const data = await res.json();
+  const site = normalizeAdminSiteConfig((data as { site?: unknown }).site);
+  if (!site) throw new Error("Invalid admin config response");
+
+  return {
+    site,
+    devices: parseAdminDevicesResponse(data),
+  };
+}
+
+export async function updateAdminSiteConfig(
+  payload: AdminSiteConfigUpdate,
+  adminToken: string,
+): Promise<AdminSiteConfig> {
+  const res = await fetch(buildApiUrl("/api/config/site"), {
+    method: "POST",
+    headers: buildAdminHeaders(adminToken),
+    body: JSON.stringify(payload),
+    cache: "no-store",
+  });
+
+  if (!res.ok) throw new Error(await parseApiError(res));
+
+  const data = await res.json();
+  const site = normalizeAdminSiteConfig((data as { site?: unknown }).site);
+  if (!site) throw new Error("Invalid site config response");
+  return site;
+}
+
+export async function upsertAdminDeviceConfig(
+  payload: AdminDeviceConfigMutation,
+  adminToken: string,
+): Promise<AdminDeviceConfig[]> {
+  const res = await fetch(buildApiUrl("/api/config/devices"), {
+    method: "POST",
+    headers: buildAdminHeaders(adminToken),
+    body: JSON.stringify(payload),
+    cache: "no-store",
+  });
+
+  if (!res.ok) throw new Error(await parseApiError(res));
+  return parseAdminDevicesResponse(await res.json());
+}
+
+export async function removeAdminDeviceConfig(
+  deviceId: string,
+  adminToken: string,
+): Promise<AdminDeviceConfig[]> {
+  const res = await fetch(buildApiUrl("/api/config/devices"), {
+    method: "DELETE",
+    headers: buildAdminHeaders(adminToken),
+    body: JSON.stringify({ device_id: deviceId }),
+    cache: "no-store",
+  });
+
+  if (!res.ok) throw new Error(await parseApiError(res));
+  return parseAdminDevicesResponse(await res.json());
 }
