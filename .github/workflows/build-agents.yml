@@ -6,19 +6,17 @@ on:
   workflow_dispatch:
     inputs:
       windows_ref:
-        description: 'Windows source branch/tag/SHA (default: windows-source)'
-        default: 'windows-source'
+        description: 'Windows source branch/tag/SHA (default: main)'
+        default: 'main'
       macos_ref:
-        description: 'macOS source branch/tag/SHA (default: macos-source)'
-        default: 'macos-source'
+        description: 'macOS source branch/tag/SHA (default: main)'
+        default: 'main'
       android_ref:
         description: 'Android source branch/tag/SHA (default: main)'
         default: 'main'
 
-# Architecture: Agent source code lives on dedicated branches (windows-source,
-# macos-source), not on main. Tag-triggered builds checkout the latest HEAD of
-# each source branch. For reproducible builds, use workflow_dispatch with
-# specific commit SHAs.
+# Architecture: Tag-triggered builds should compile the exact tagged commit.
+# Manual runs can override source refs via workflow_dispatch inputs.
 
 jobs:
   build-windows:
@@ -72,7 +70,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ inputs.android_ref || 'main' }}
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.android_ref || github.sha }}
       - name: Set up JDK 17
         uses: actions/setup-java@v4
         with:
@@ -156,7 +154,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ inputs.android_ref || 'main' }}
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.android_ref || github.sha }}
       - name: Set up .NET SDK
         uses: actions/setup-dotnet@v4
         with:
