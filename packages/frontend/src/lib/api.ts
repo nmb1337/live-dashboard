@@ -367,12 +367,15 @@ function normalizeAdminDeviceConfig(value: unknown): AdminDeviceConfig | null {
   const isSourceValid = record.source === "env" || record.source === "runtime";
   if (!isPlatformValid || !isSourceValid) return null;
 
+  const platform = record.platform as AdminDeviceConfig["platform"];
+  const source = record.source as AdminDeviceConfig["source"];
+
   return {
     token: record.token,
     device_id: record.device_id,
     device_name: record.device_name,
-    platform: record.platform,
-    source: record.source,
+    platform,
+    source,
   };
 }
 
